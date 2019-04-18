@@ -1,7 +1,8 @@
 #include "bin.cuh"
 #include "parse.cuh"
 #include "bin_kernel.cuh"
-
+#include <iomanip>
+#include <iostream>
 #include <sys/stat.h>
 
 #include <thrust/sort.h>
@@ -262,6 +263,7 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
     int32_t countIn, countOut;
     UMAP::const_iterator gid, bin;
     countIn = countOut = 0;
+    cout.setf(std::ios::fixed);
     for (int i = 0; i < numOfASE; i++) {
         if (h_ase_psi[i].countIn) countIn++;
         if (h_ase_psi[i].countOut) countOut++;
@@ -269,7 +271,7 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
         bin = g_name_map.find(h_ase_psi[i].bin_h);
         std::cout << gid->second << " "
                  << ((bin == g_name_map.end()) ? "null" : bin->second)
-                 << " " << h_ase_psi[i].countIn << " " << h_ase_psi[i].countOut
+                 << " " << std::setprecision(3) <<h_ase_psi[i].countIn << " " << h_ase_psi[i].countOut
 #ifdef BETAINV
                   <<" " << psi_ub[i] << " " << psi_lb[i]
 #endif
