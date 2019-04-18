@@ -263,7 +263,7 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
     int32_t countIn, countOut;
     UMAP::const_iterator gid, bin;
     countIn = countOut = 0;
-    cout.setf(std::ios::fixed);
+    std::cout.setf(std::ios::fixed);
     for (int i = 0; i < numOfASE; i++) {
         if (h_ase_psi[i].countIn) countIn++;
         if (h_ase_psi[i].countOut) countOut++;
