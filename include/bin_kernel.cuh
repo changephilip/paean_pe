@@ -78,14 +78,17 @@ __global__ void gpu_count_tempTPM(d_Bins d_bins, int32_t numOfBin, float *d_temp
 }
 
 __global__ void gpu_count_TPM(d_Bins d_bins, int32_t numOfBin,
-                              float *d_tempTPM, float *d_tpmCounter) {
+                              float *d_tempTPM, float *d_tpmCounter, float *d_tpmStore) {
     int32_t binId = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (binId < numOfBin) {
         // make sure d_tpmCounter is not zero
         if (*d_tpmCounter == 0) return;
         // compute tpmCount for each bin
-        d_bins.core[binId].tpmCount = 1000000 * d_tempTPM[binId] / (*d_tpmCounter);
+        float tmp;
+        tmp = 1000000 * d_tempTPM[binId] / (*d_tpmCounter);
+        d_bins.core[binId].tpmCount = tmp;
+       	d_tpmStore[binId] = tmp;
 //#define DEBUG
 #ifdef DEBUG
         printf("d_tpmCounter: %f\n", *d_tpmCounter);
@@ -272,7 +275,7 @@ __global__ void gpu_assign_read_ASE_kernel(d_ASEs d_ases, int32_t numOfASE,
  }
 #define BETAINV
 #ifdef BETAINV
-__global__ void gpu_post_PSI(ASEPsi *d_ase_psi, float *PSI_UB,
+__global__ void gpu_post_PSI(ASEPsi *d_ase_psi,ASECounter *ACT, float *PSI_UB,
                              float *PSI_LB, int32_t numOfASE)
 {
     int32_t aseId = blockDim.x * blockIdx.x + threadIdx.x;
@@ -280,8 +283,15 @@ __global__ void gpu_post_PSI(ASEPsi *d_ase_psi, float *PSI_UB,
     float countOut;
     float psi_ub;
     float psi_lb;
+    ASECounter act;
     if (aseId < numOfASE) {
-        countIn = d_ase_psi[aseId].countIn;
+        act = ACT[aseId];
+        if (act.anchor[3]){
+        countIn = d_ase_psi[aseId].countIn/3;
+	}
+	else{
+	countIn = d_ase_psi[aseId].countIn/2;
+	}
         countOut = d_ase_psi[aseId].countOut;
         psi_ub = 1 - invbetai(0.025, countOut, countIn + 1);
         psi_lb = 1 - invbetai(0.975, countOut + 1, countIn);

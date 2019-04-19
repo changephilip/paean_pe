@@ -17,7 +17,9 @@
 
 // global variables
 typedef std::unordered_map<size_t, std::string> UMAP;
+typedef std::unordered_map<size_t, size_t> NMAP;
 UMAP g_gid_map, g_name_map;
+NMAP bin_id_map;
 std::hash<std::string> HASH;
 
 uint64_t _offset(char *chr) {

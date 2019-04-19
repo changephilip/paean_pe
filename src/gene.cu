@@ -195,11 +195,17 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
     CUDA_SAFE_CALL(cudaMalloc((void **)&d_tpmCounter, tpmSize * sizeof(float)));
     CUDA_SAFE_CALL(cudaMemset(d_tpmCounter, 0, tpmSize * sizeof(float)));
     // count temp
+    float *tpmStore;
+    tpmStore = new float[numOfBin];
+    float *d_tpmStore;
+    CUDA_SAFE_CALL(cudaMalloc((void **)&d_tpmStore, numOfBin * sizeof(float)));
+
     std::cout << "starting count tpm..." << std::endl;
     gpu_count_tempTPM<<<nBlock, blockSize>>>(d_bins, numOfBin, d_tempTPM);
     reduceSinglePass(static_cast<int>(numOfBin), blockSize, static_cast<int>(tpmSize), d_tempTPM, d_tpmCounter);
-    gpu_count_TPM<<<nBlock, blockSize>>>(d_bins, numOfBin, d_tempTPM, d_tpmCounter);
+    gpu_count_TPM<<<nBlock, blockSize>>>(d_bins, numOfBin, d_tempTPM, d_tpmCounter,d_tpmStore);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    CUDA_SAFE_CALL(cudaMemcpy(tpmStore,d_tpmStore,numOfBin*sizeof(float),cudaMemcpyDeviceToHost));
 
     // auxiliary array
     Assist *d_assist_ases;
@@ -248,7 +254,7 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
     CUDA_SAFE_CALL(cudaMalloc((void**)&d_psi_ub,numOfASE*sizeof(float)));
     CUDA_SAFE_CALL(cudaMalloc((void**)&d_psi_lb,numOfASE*sizeof(float)));
     std::cout << "starting calculating beta.inv psi..." <<std::endl;
-    gpu_post_PSI<<<nBlock,blockSize>>>(d_ase_psi,d_psi_ub,d_psi_lb,numOfASE);
+    gpu_post_PSI<<<nBlock,blockSize>>>(d_ase_psi,ACT,d_psi_ub,d_psi_lb,numOfASE);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     CUDA_SAFE_CALL(cudaMemcpy(psi_ub,d_psi_ub,numOfASE*sizeof(float),cudaMemcpyDeviceToHost));
     CUDA_SAFE_CALL(cudaMemcpy(psi_lb,d_psi_lb,numOfASE*sizeof(float),cudaMemcpyDeviceToHost));
@@ -262,13 +268,26 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
     // ase psi
     int32_t countIn, countOut;
     UMAP::const_iterator gid, bin;
+    NMAP::const_iterator bin_id;
     countIn = countOut = 0;
     std::cout.setf(std::ios::fixed);
+    std::cout << "ase_event" << " "
+              << "gene_name" << " "
+              << "countIn"   << " "
+              << "countOut"  << " "
+              << "psi_ub"    << " "
+              << "psi_lb"    << " "
+              << "psi" << " "
+              << "tpm"       <<std::endl;
+    for (int i = 0; i < numOfBin; i++){
+	bin_id_map.insert({h_bins.core[i].name_h,i});
+	}
     for (int i = 0; i < numOfASE; i++) {
         if (h_ase_psi[i].countIn) countIn++;
         if (h_ase_psi[i].countOut) countOut++;
         gid = g_gid_map.find(h_ase_psi[i].gid_h);
         bin = g_name_map.find(h_ase_psi[i].bin_h);
+        bin_id = bin_id_map.find(h_ase_psi[i].bin_h);
         std::cout << gid->second << " "
                  << ((bin == g_name_map.end()) ? "null" : bin->second)
                  << " " << std::setprecision(3) <<h_ase_psi[i].countIn << " " << h_ase_psi[i].countOut
@@ -276,11 +295,12 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
                   <<" " << psi_ub[i] << " " << psi_lb[i]
 #endif
 
-                 << " " << h_ase_psi[i].psi << std::endl;
+                 << " " << h_ase_psi[i].psi   
+                 << " " << ((bin == g_name_map.end()) ? -1:tpmStore[bin_id->second]) << std::endl;
     }
-    std::cout << countIn << " " << countOut << std::endl;
+    std::cout << std::setprecision(3) << countIn << " " << std::setprecision(3) << countOut << std::endl;
     // tpm
-    std::cout << "tpm count: " << tpmCounter << std::endl;
+    std::cout << std::setprecision(3) <<"tpm count: " << tpmCounter << std::endl;
 #endif
 #ifdef BETAINV
 delete[] psi_ub;
@@ -291,10 +311,12 @@ delete[] psi_lb;
    std::cout << "free memory..." << std::endl;
    cudaFree(d_ase_psi);
    cudaFree(d_tempTPM);
+   cudaFree(d_tpmStore);
    cudaFree(d_tpmCounter);
    cudaFree(d_assist_reads);
    cudaFree(d_assist_ases);
    cudaFree(d_assist_read_ases);
+   delete[] tpmStore;
 }
 
 int main(int argc, char** argv) {
