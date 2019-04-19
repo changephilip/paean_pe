@@ -293,8 +293,7 @@ __global__ void gpu_post_PSI(ASEPsi *d_ase_psi,ASECounter *ACT, float *PSI_UB,
 	countIn = d_ase_psi[aseId].countIn/2;
 	}
         countOut = d_ase_psi[aseId].countOut;
-        psi_ub = 1 - invbetai(0.025, countOut, countIn + 1);
-        psi_lb = 1 - invbetai(0.975, countOut + 1, countIn);
+        
         if (countIn == 0 || countOut == 0) {
             if (countIn+countOut>=5){
             psi_ub = 1;
@@ -305,6 +304,10 @@ __global__ void gpu_post_PSI(ASEPsi *d_ase_psi,ASECounter *ACT, float *PSI_UB,
             psi_lb = 0;
                 }
         }
+        else{
+        psi_ub = 1 - invbetai(0.025, countOut, countIn + 1);
+        psi_lb = 1 - invbetai(0.975, countOut + 1, countIn);
+	}
         PSI_UB[aseId]=psi_ub;
         PSI_LB[aseId]=psi_lb;
     }
