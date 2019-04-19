@@ -266,7 +266,7 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
 #define DEBUG
 #ifdef DEBUG
     // ase psi
-    int32_t countIn, countOut;
+    float countIn, countOut;
     UMAP::const_iterator gid, bin;
     NMAP::const_iterator bin_id;
     countIn = countOut = 0;

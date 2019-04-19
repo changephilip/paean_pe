@@ -232,7 +232,7 @@ __global__ void gpu_assign_read_ASE_kernel(d_ASEs d_ases, int32_t numOfASE,
  __global__ void gpu_count_PSI(d_ASEs d_ases, int32_t numOfASE,
                                ASEPsi *d_ase_psi, ASECounter *ACT) {
      int32_t aseId = blockDim.x * blockIdx.x + threadIdx.x;
-     int32_t countOut;
+     float countOut;
      float countIn, psi;
      ASECounter act;
 
@@ -283,6 +283,8 @@ __global__ void gpu_post_PSI(ASEPsi *d_ase_psi,ASECounter *ACT, float *PSI_UB,
     float countOut;
     float psi_ub;
     float psi_lb;
+    float eps;
+    eps = 1.0e-5;
     ASECounter act;
     if (aseId < numOfASE) {
         act = ACT[aseId];
@@ -294,7 +296,7 @@ __global__ void gpu_post_PSI(ASEPsi *d_ase_psi,ASECounter *ACT, float *PSI_UB,
 	}
         countOut = d_ase_psi[aseId].countOut;
         
-        if (countIn == 0 || countOut == 0) {
+        if (fabs(countIn) <eps || fabs(countOut) < eps) {
             if (countIn+countOut>=5){
             psi_ub = 1;
             psi_lb = 1;

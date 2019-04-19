@@ -232,7 +232,7 @@ typedef struct {
     size_t bin_h;
     float countIn;
     //int32_t countIn;
-    int32_t countOut;
+    float countOut;
     float psi;               // by sum(anchors)
     // confidence interval
     float ciStart;
