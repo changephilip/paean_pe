@@ -235,6 +235,7 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
     // count psi
     std::cout << "starting count psi..." << std::endl;
     gpu_count_PSI<<<nBlock, blockSize>>>(d_ases, numOfASE, d_ase_psi, ACT);
+    
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
     // psi
@@ -254,7 +255,7 @@ void HandleBin(h_Bins& h_bins, h_Reads& h_reads, h_ASEs& h_ases) {
     CUDA_SAFE_CALL(cudaMalloc((void**)&d_psi_ub,numOfASE*sizeof(float)));
     CUDA_SAFE_CALL(cudaMalloc((void**)&d_psi_lb,numOfASE*sizeof(float)));
     std::cout << "starting calculating beta.inv psi..." <<std::endl;
-    gpu_post_PSI<<<nBlock,blockSize>>>(d_ase_psi,ACT,d_psi_ub,d_psi_lb,numOfASE);
+    gpu_post_PSI<<<nBlock*2,blockSize/2>>>(d_ase_psi,ACT,d_psi_ub,d_psi_lb,numOfASE);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     CUDA_SAFE_CALL(cudaMemcpy(psi_ub,d_psi_ub,numOfASE*sizeof(float),cudaMemcpyDeviceToHost));
     CUDA_SAFE_CALL(cudaMemcpy(psi_lb,d_psi_lb,numOfASE*sizeof(float),cudaMemcpyDeviceToHost));
