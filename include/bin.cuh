@@ -72,13 +72,13 @@ const int step = 0.01;
 const int readLength = 100;
 
 typedef struct ALIGN(4) {
-    int32_t start_;
-    int32_t end_;
+    int32_t start_=0;
+    int32_t end_=0;
 } Junction, Anchor, Assist;
 
 struct ALIGN(8) read_core_t {
     // with junction
-    uint32_t junctionCount;
+    uint32_t junctionCount=0;
     Junction junctions[junctionSize];
 
     __host__ __device__

@@ -439,7 +439,7 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 				start_posList.begin(), start_posList.end()));
 			    h_reads.end_.push_back(*std::max_element(
 				end_posList.begin(), end_posList.end()));
-			    h_reads.strand.push_back((uint32_t)(true));
+			    h_reads.strand.push_back((uint32_t)(!bam_is_rev(b)));
 
 			    h_reads.core.push_back(read_core);
 			    //junctionSet.clear();
