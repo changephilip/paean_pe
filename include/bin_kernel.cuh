@@ -98,7 +98,7 @@ __global__ void gpu_count_TPM(d_Bins d_bins, int32_t numOfBin,
 
 __global__ void gpu_assign_ASE_kernel(d_Bins d_bins, int32_t numOfBin,
                                       d_ASEs d_ases, int32_t numOfASE,
-                                      Assist *d_assist) {
+                                      Assist *d_assist, int32_t *d_bin2bin) {
     int32_t binId = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (binId < numOfBin) {
@@ -114,8 +114,10 @@ __global__ void gpu_assign_ASE_kernel(d_Bins d_bins, int32_t numOfBin,
             if ((d_ases.strand[aseId] == d_bins.strand[binId]) &&
                     (d_ases.end_[aseId] <= d_bins.end_[binId])) {
                 d_ases.core[aseId].bin_h = d_bins.core[binId].name_h;
+                d_bin2ase[aseId] = binId;
             } else {
                 d_ases.core[aseId].bin_h = 0;
+                d_bin2ase[aseId] = -1;
             }
         }
 
@@ -152,6 +154,106 @@ __global__ void gpu_assign_read_ASE_kernel(d_ASEs d_ases, int32_t numOfASE,
 
         // assign
         for (int readId = d_assist[aseId].start_; readId < d_assist[aseId].end_; readId++) {
+            read_strand = d_reads.strand[readId];
+            ase_strand = d_ases.strand[aseId];
+            if (read_strand == ase_strand) {
+                read_s = uint32_t(d_reads.start_[readId] & (refLength - 1));
+                read_e = uint32_t(d_reads.end_[readId] & (refLength - 1));
+#ifdef SE_ANCHOR
+                // JTAT
+                junctionCount = d_reads.core[readId].junctionCount;
+                if (junctionCount) {
+                    #pragma unroll
+                    for (int jId = 0; jId < junctionCount; jId++) {
+                        junction_s = d_reads.core[readId].junctions[jId].start_ + read_s - 1;
+                        junction_e = d_reads.core[readId].junctions[jId].end_ + read_s;
+                        if (ase_strand) {
+                            if (junction_s == coord[1] && junction_e == coord[2]) ACT[aseId].anchor[0]++;
+                            if (junction_s == coord[3] && junction_e == coord[4]) ACT[aseId].anchor[1]++;
+                            if (junction_s == coord[1] && junction_e == coord[4]) ACT[aseId].anchor[2]++;
+                        } else {
+                            if (junction_s == coord[5] && junction_e == coord[2]) ACT[aseId].anchor[0]++;
+                            if (junction_s == coord[3] && junction_e == coord[0]) ACT[aseId].anchor[1]++;
+                            if (junction_s == coord[5] && junction_e == coord[0]) ACT[aseId].anchor[2]++;
+                        }
+
+                    }
+                } else {
+                    // ART
+                    if ((read_s >= coord[2] && read_s <= coord[3]) ||
+                        (read_e >= coord[2] && read_e <= coord[3])) {
+                        ACT[aseId].anchor[3]++;
+                    }
+                }
+#elif defined(RI_ANCHOR)
+                // JTAT
+                junctionCount = d_reads.core[readId].junctionCount;
+                if (junctionCount) {
+                    #pragma unroll
+                    for (int jId = 0; jId < junctionCount; jId++) {
+                        junction_s = d_reads.core[readId].junctions[jId].start_ + read_s - 1;
+                        junction_e = d_reads.core[readId].junctions[jId].end_ + read_s;
+                        if (ase_strand) {
+                            if (junction_s == coord[1] && junction_e == coord[2])
+                                ACT[aseId].anchor[0]++;
+                        } else {
+                            if (junction_s == coord[2] && junction_e == coord[1])
+                                ACT[aseId].anchor[0]++;
+                        }
+
+                    }
+                } else {
+                    // ART
+                    if (ase_strand) {
+                        if ((read_s >= coord[1] && read_s <= coord[2]) ||
+                            (read_e >= coord[1] && read_e <= coord[2])) {
+                            ACT[aseId].anchor[1]++;
+                        }
+                    } else {
+                        if ((read_s >= coord[2] && read_s <= coord[1]) ||
+                            (read_e >= coord[2] && read_e <= coord[1])) {
+                            ACT[aseId].anchor[1]++;
+                        }
+                    }
+                }
+#endif
+            }
+        }
+//        if (d_ases.start_[aseId] == 764383L && d_ases.end_[aseId] == 787490L) {
+//            printf("%d %d\n", d_assist[aseId].end_, d_assist[aseId].start_);
+//            for (int i = 0; i < anchorCount; i++) printf("%d\n", ACT[aseId].anchor[i]);
+//        }
+// #define DEBUG
+#ifdef DEBUG
+    if (aseId == 0)
+        for (int i = 0; i < anchorCount; i++) printf("%d %d\n", aseId, ACT[aseId].anchor[i]);
+#endif
+    }
+}
+__global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
+                                           d_Reads d_reads, int32_t numOfRead,
+                                            Assist *d_assist, ASECounter *ACT,int32_t *d_bin2ase) {
+    int32_t aseId = blockDim.x * blockIdx.x + threadIdx.x;
+    uint32_t read_strand, ase_strand, junctionCount;
+    uint32_t read_s, read_e, junction_s, junction_e;
+    int32_t *coord;
+
+    if (aseId < numOfASE) {
+        // try assign
+        gpu_try_assign_kernel(
+                d_ases.start_[aseId], d_ases.end_[aseId],
+                aseId, d_reads.start_, numOfRead, d_assist
+        );
+        __threadfence();
+
+        // for calc psi
+        coord = d_ases.core[aseId].coordinates;
+        ACT[aseId].artRange.start_ = coord[2];
+        ACT[aseId].artRange.end_ = coord[3];
+        uint32_t binId;
+        binId = d_bin2ase[aseId];
+        // assign
+        for (int readId = d_assist[binId].start_; readId < d_assist[binId].end_; readId++) {
             read_strand = d_reads.strand[readId];
             ase_strand = d_ases.strand[aseId];
             if (read_strand == ase_strand) {
