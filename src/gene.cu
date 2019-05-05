@@ -173,10 +173,16 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
     Assist *d_assist_reads;
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&d_assist_reads, sizeof(Assist) * numOfBin));
+    int32_t * d_read2bin_start;
+    int32_t * d_read2bin_end;
+    CUDA_SAFE_CALL(
+        cudaMalloc((void **)&d_read2bin_start, sizeof(int32_t) * numOfBin));
+    CUDA_SAFE_CALL(
+        cudaMalloc((void **)&d_read2bin_end, sizeof(int32_t) * numOfBin));
     // assign reads to bins
     std::cout << "starting assign reads..." << std::endl;
     gpu_assign_read_kernel<<<nBlock, blockSize>>>(d_bins, numOfBin, d_reads,
-                                                  numOfRead, d_assist_reads);
+                                                  numOfRead, d_assist_reads,d_read2bin_start,d_read2bin_end);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
     float *d_tempTPM, *d_tpmCounter;
@@ -226,10 +232,10 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
     nBlock = (unsigned(numOfASE) + blockSize - 1) / blockSize;
     // assign reads to ases
     std::cout << "starting assign reads to ases..." << std::endl;
-    gpu_assign_read_ASE_kernel<<<nBlock, blockSize>>>(
-        d_ases, numOfASE, d_reads, numOfRead, d_assist_read_ases, ACT);
+    //gpu_assign_read_ASE_kernel<<<nBlock, blockSize>>>(
+     //   d_ases, numOfASE, d_reads, numOfRead, d_assist_read_ases, ACT);
     gpu_assign_read_ASE_kernel2<<<nBlock, blockSize>>>(
-            d_ases, numOfASE, d_reads, numOfRead, d_assist_read_ases, ACT,d_bin2ase);
+            d_ases, numOfASE, d_reads, numOfRead, d_assist_read_ases, ACT,d_bin2ase,d_read2bin_start,d_read2bin_end);
 
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
@@ -337,6 +343,8 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
     cudaFree(d_assist_reads);
     cudaFree(d_assist_ases);
     cudaFree(d_assist_read_ases);
+    cudaFree(d_read2bin_start);
+    cudaFree(d_read2bin_end);
     cudaFree(d_bin2ase);
     delete[] tpmStore;
 }

@@ -40,7 +40,7 @@ __device__ void gpu_try_assign_kernel(uint64_t bin_start, uint64_t bin_end,
 
 __global__ void gpu_assign_read_kernel(d_Bins d_bins, int32_t numOfBin,
                                        d_Reads d_reads, int32_t numOfRead,
-                                       Assist *d_assist) {
+                                       Assist *d_assist,int32_t *d_read2bin_start,int32_t *d_read2bin_end) {
     int32_t binId = blockDim.x * blockIdx.x + threadIdx.x;
     int temp = 0;
 
@@ -51,7 +51,8 @@ __global__ void gpu_assign_read_kernel(d_Bins d_bins, int32_t numOfBin,
             binId, d_reads.start_, numOfRead, d_assist
         );
         __threadfence();
-
+        d_read2bin_start[binId] = d_assist[binId].start_;
+        d_read2bin_end[binId] = d_assist[binId].end_;
         for (int readId = d_assist[binId].start_; readId < d_assist[binId].end_; readId++) {
             if ((d_reads.strand[readId] != d_bins.strand[binId]) ||
                     (d_reads.end_[readId] > d_bins.end_[binId])) temp++;
@@ -98,7 +99,7 @@ __global__ void gpu_count_TPM(d_Bins d_bins, int32_t numOfBin,
 
 __global__ void gpu_assign_ASE_kernel(d_Bins d_bins, int32_t numOfBin,
                                       d_ASEs d_ases, int32_t numOfASE,
-                                      Assist *d_assist, int32_t *d_bin2bin) {
+                                      Assist *d_assist, int32_t *d_bin2ase) {
     int32_t binId = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (binId < numOfBin) {
@@ -117,7 +118,8 @@ __global__ void gpu_assign_ASE_kernel(d_Bins d_bins, int32_t numOfBin,
                 d_bin2ase[aseId] = binId;
             } else {
                 d_ases.core[aseId].bin_h = 0;
-                d_bin2ase[aseId] = -1;
+                d_bin2ase[aseId] = binId;
+//                d_bin2ase[aseId] = 0;
             }
         }
 
@@ -232,7 +234,7 @@ __global__ void gpu_assign_read_ASE_kernel(d_ASEs d_ases, int32_t numOfASE,
 }
 __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
                                            d_Reads d_reads, int32_t numOfRead,
-                                            Assist *d_assist, ASECounter *ACT,int32_t *d_bin2ase) {
+                                            Assist *d_assist, ASECounter *ACT,int32_t *d_bin2ase,int32_t * d_read2bin_start,int32_t *d_read2bin_end) {
     int32_t aseId = blockDim.x * blockIdx.x + threadIdx.x;
     uint32_t read_strand, ase_strand, junctionCount;
     uint32_t read_s, read_e, junction_s, junction_e;
@@ -240,10 +242,12 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
 
     if (aseId < numOfASE) {
         // try assign
+        /*
         gpu_try_assign_kernel(
                 d_ases.start_[aseId], d_ases.end_[aseId],
                 aseId, d_reads.start_, numOfRead, d_assist
         );
+        */
         __threadfence();
 
         // for calc psi
@@ -253,10 +257,12 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
         uint32_t binId;
         binId = d_bin2ase[aseId];
         // assign
-        for (int readId = d_assist[binId].start_; readId < d_assist[binId].end_; readId++) {
+        //for (int readId = d_assist[binId].start_; readId < d_assist[binId].end_; readId++) {
+        for (int readId = d_read2bin_start[binId]; readId < d_read2bin_end[binId]; readId++) {
             read_strand = d_reads.strand[readId];
             ase_strand = d_ases.strand[aseId];
-            if (read_strand == ase_strand) {
+            //if (read_strand == ase_strand) {
+            if ( 1) {
                 read_s = uint32_t(d_reads.start_[readId] & (refLength - 1));
                 read_e = uint32_t(d_reads.end_[readId] & (refLength - 1));
 #ifdef SE_ANCHOR
@@ -265,8 +271,11 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
                 if (junctionCount) {
                     #pragma unroll
                     for (int jId = 0; jId < junctionCount; jId++) {
+                        //junction_s = d_reads.core[readId].junctions[jId].start_ + read_s - 1;
                         junction_s = d_reads.core[readId].junctions[jId].start_ + read_s - 1;
+                        //junction_e = d_reads.core[readId].junctions[jId].end_ + read_s;
                         junction_e = d_reads.core[readId].junctions[jId].end_ + read_s;
+                        
                         if (ase_strand) {
                             if (junction_s == coord[1] && junction_e == coord[2]) ACT[aseId].anchor[0]++;
                             if (junction_s == coord[3] && junction_e == coord[4]) ACT[aseId].anchor[1]++;
@@ -276,6 +285,11 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
                             if (junction_s == coord[3] && junction_e == coord[0]) ACT[aseId].anchor[1]++;
                             if (junction_s == coord[5] && junction_e == coord[0]) ACT[aseId].anchor[2]++;
                         }
+                        /*
+                            if (junction_s == coord[1] && junction_e == coord[2]) ACT[aseId].anchor[0]++;
+                            if (junction_s == coord[3] && junction_e == coord[4]) ACT[aseId].anchor[1]++;
+                            if (junction_s == coord[1] && junction_e == coord[4]) ACT[aseId].anchor[2]++;
+			*/
 
                     }
                 } else {
@@ -341,8 +355,11 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
      if (aseId < numOfASE) {
         act = ACT[aseId];
 #ifdef SE_ANCHOR
-        countIn = act.anchor[0] + act.anchor[1] + \
-               act.anchor[3] / float(act.artRange.end_ - act.artRange.start_);
+        //countIn = act.anchor[0] + act.anchor[1] + \
+        //       act.anchor[3] / float(act.artRange.end_ - act.artRange.start_);
+	countIn = act.anchor[0] + act.anchor[1] + \
+               act.anchor[3] ;
+
         countOut = act.anchor[2];
         if (act.anchor[3]) {
             psi = (countIn / 3) / (countIn / 3 + countOut);
