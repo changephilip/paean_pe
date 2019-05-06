@@ -248,7 +248,7 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
                 aseId, d_reads.start_, numOfRead, d_assist
         );
         */
-        __threadfence();
+        //__threadfence();
 
         // for calc psi
         coord = d_ases.core[aseId].coordinates;
@@ -262,14 +262,14 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
             read_strand = d_reads.strand[readId];
             ase_strand = d_ases.strand[aseId];
             //if (read_strand == ase_strand) {
-            if ( 1) {
+            if ( true ) {
                 read_s = uint32_t(d_reads.start_[readId] & (refLength - 1));
                 read_e = uint32_t(d_reads.end_[readId] & (refLength - 1));
 #ifdef SE_ANCHOR
                 // JTAT
                 junctionCount = d_reads.core[readId].junctionCount;
                 if (junctionCount) {
-                    #pragma unroll
+                    //#pragma unroll
                     for (int jId = 0; jId < junctionCount; jId++) {
                         //junction_s = d_reads.core[readId].junctions[jId].start_ + read_s - 1;
                         junction_s = d_reads.core[readId].junctions[jId].start_ + read_s - 1;

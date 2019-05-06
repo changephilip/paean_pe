@@ -365,7 +365,7 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 		h_reads.core.push_back(read_core);
 	    } else {
 		// if paried, PE
-		if (JunctionList.size() == 0) {
+		if (qname_reg.empty() ) {
 		    // if the first qname
 		    qname_reg = (char *)(b->data);
 		    for (int i = 1; i < (b->core).n_cigar; i++) {
@@ -405,7 +405,7 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 			// To strike the JunctionList
 			// unique chrList to determine whether only mapping to
 			// one chromosome
-			if (chrList.size() == 1) {
+			if (chrList.size() == 1 and JunctionList.size()!=0) {
 			    read_core_t read_core;
 			    int32_t delta[start_posList.size()];
 			    std::vector<junctionInline>::iterator it;
@@ -462,6 +462,8 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 			    }
 			    prev = prev + (cigars[i] >> 4);
 			}
+		        std::string tmp_qname = (char *)qname[(b->core).tid];
+			chrList.insert(tmp_qname);
 		    }
 		}
 	    }
@@ -488,15 +490,14 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 	    for (int i = 0; i < JunctionList.size(); i++) {
 		junctionSet.insert(JunctionList[i]);
 	    }
-	    
 	    std::set<junctionInline>::iterator its;
 	    for (its = junctionSet.begin(); its != junctionSet.end(); its++) {
 		read_core.junctions[read_core.junctionCount].start_ =
 		    its->first;
-		read_core.junctions[read_core.junctionCount].end_ = it->second;
+		read_core.junctions[read_core.junctionCount].end_ = its->second;
 		read_core.junctionCount++;
 	    }
-
+	    
 	    h_reads.start_.push_back(
 		*std::min_element(start_posList.begin(), start_posList.end()));
 	    h_reads.end_.push_back(
