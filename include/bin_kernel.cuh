@@ -237,7 +237,8 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
                                             Assist *d_assist, ASECounter *ACT,int32_t *d_bin2ase,int32_t * d_read2bin_start,int32_t *d_read2bin_end) {
     int32_t aseId = blockDim.x * blockIdx.x + threadIdx.x;
     uint32_t read_strand, ase_strand, junctionCount;
-    uint32_t read_s, read_e, junction_s, junction_e;
+    uint32_t read_s, read_e;
+    uint64_t junction_s, junction_e;
     int32_t *coord;
 
     if (aseId < numOfASE) {
