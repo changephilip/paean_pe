@@ -241,7 +241,7 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
     uint64_t junction_s, junction_e;
     int32_t *coord;
 
-    if (aseId < numOfASE) {
+    if (aseId < numOfASE && d_ases.core[aseId].bin_h != 0) {
         // try assign
         /*
         gpu_try_assign_kernel(
@@ -291,6 +291,26 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
                             if (junction_s == coord[3] && junction_e == coord[4]) ACT[aseId].anchor[1]++;
                             if (junction_s == coord[1] && junction_e == coord[4]) ACT[aseId].anchor[2]++;
 			*/
+
+                    }
+                } else {
+                    // ART
+                    if ((read_s >= coord[2] && read_s <= coord[3]) ||
+                        (read_e >= coord[2] && read_e <= coord[3])) {
+                        ACT[aseId].anchor[3]++;
+                    }
+                }
+#elif defined(N_SE_ANCHOR)
+                // JTAT
+                junctionCount = d_reads.core[readId].junctionCount;
+                if (junctionCount) {
+                    #pragma unroll
+                    for (int jId = 0; jId < junctionCount; jId++) {
+                        junction_s = d_reads.core[readId].junctions[jId].start_ + read_s - 1;
+                        junction_e = d_reads.core[readId].junctions[jId].end_ + read_s;
+                        if (junction_s == coord[1] && junction_e == coord[2]) ACT[aseId].anchor[0]++;
+                        if (junction_s == coord[3] && junction_e == coord[4]) ACT[aseId].anchor[1]++;
+                        if (junction_s == coord[1] && junction_e == coord[4]) ACT[aseId].anchor[2]++;
 
                     }
                 } else {
@@ -355,7 +375,7 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
 
      if (aseId < numOfASE) {
         act = ACT[aseId];
-#ifdef SE_ANCHOR
+#if defined(SE_ANCHOR) || defined(N_SE_ANCHOR)
         //countIn = act.anchor[0] + act.anchor[1] + \
         //       act.anchor[3] / float(act.artRange.end_ - act.artRange.start_);
 	countIn = act.anchor[0] + act.anchor[1] + \

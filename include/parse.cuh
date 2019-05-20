@@ -8,6 +8,7 @@
 
 #include <string>
 #include <fstream>
+#include <sstream>
 #include <cassert>
 #include <algorithm>
 #include <unordered_map>
@@ -65,6 +66,7 @@ void LoadBinFromGff(h_Bins& h_bins, char* gff_file) {
 }
 
 void LoadAseFromGFF(h_ASEs& h_ases, char *gff_file) {
+#if defined(SE_ANCHOR) || defined(RI_ANCHOR)
     GffReader reader(gff_file);
     reader.readAll(true);
 
@@ -105,19 +107,67 @@ void LoadAseFromGFF(h_ASEs& h_ases, char *gff_file) {
                 // set to zero
                 c_memset(tGid, '\0', sizeof(char) * gidSize);
 // #define DEBUG
-#ifdef DEBUG
-                std::cout << "ase start: " << f->start << std::endl;
-                std::cout << "ase end: " << f->end << std::endl;
-                std::cout << "ase strand: " << (f->strand == '+') << std::endl;
-                std::cout << "ase gid: ";
-                for (int i = 0; i < coordinateId; i++) {
-                    std::cout << ase_core.coordinates[i] << " ";
-                }
-                std::cout << std::endl;
-#endif
+//#ifdef DEBUG
+//                std::cout << "ase start: " << f->start << std::endl;
+//                std::cout << "ase end: " << f->end << std::endl;
+//                std::cout << "ase strand: " << (f->strand == '+') << std::endl;
+//                std::cout << "ase gid: ";
+//                for (int i = 0; i < coordinateId; i++) {
+//                    std::cout << ase_core.coordinates[i] << " ";
+//                }
+//                std::cout << std::endl;
+//#endif
             }
         }
     }
+#elif defined(N_SE_ANCHOR)
+    std::ifstream file(gff_file, std::ios::in | std::ios::binary);
+    std::string line;
+    size_t hash_t;
+
+    // skip the first line
+    std::getline(file, line);
+
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string columns[5 + coordinateCount];
+        int i = 0;
+        while (ss >> columns[i++]);
+        // gid
+        hash_t = HASH(columns[1]);
+        g_gid_map.insert({hash_t, columns[1]});
+        // coordinates
+        ase_core_t ase_core(hash_t);
+        int coordinateId = 0;
+        while (coordinateId < coordinateCount) {
+            ase_core.coordinates[coordinateId] =
+                (uint32_t)c_atoi(const_cast<char *>(columns[5 + coordinateId].data()));
+            coordinateId++;
+        }
+        std::swap(ase_core.coordinates[0], ase_core.coordinates[2]);
+        std::swap(ase_core.coordinates[1], ase_core.coordinates[3]);
+        h_ases.core.push_back(ase_core);
+        // offset
+        uint64_t offset = _offset(const_cast<char *>(columns[3].data()));
+        // others
+        uint64_t start_ = (uint64_t)ase_core.coordinates[0];
+        uint64_t end_ = (uint64_t)ase_core.coordinates[5];
+        h_ases.start_.push_back(start_ + offset);
+        h_ases.end_.push_back(end_ + offset);
+        h_ases.strand.push_back((columns[4].data()[0] == '+'));
+//#define DEBUG
+#ifdef DEBUG
+        std::cout << "ase start: " << start_ << std::endl;
+        std::cout << "ase end: " << end_ << std::endl;
+        std::cout << "ase strand: " << (columns[4].data()[0] == '+') << std::endl;
+        std::cout << "ase gid: ";
+        for (int i = 0; i < coordinateCount; i++) {
+            std::cout << ase_core.coordinates[i] << " ";
+        }
+        std::cout << std::endl;
+#endif
+    }
+#endif
 }
 
 void LoadReadFromBam_1(h_Reads& h_reads, char* bam_file) {
@@ -267,23 +317,23 @@ void LoadReadFromBam_1(h_Reads& h_reads, char* bam_file) {
     bam_destroy1(b);
 
 //#define DEBUG
-#ifdef DEBUG
-    // print reads
-    for (int itr = 0; itr < h_reads.start_.size(); itr++) {
-        std::cout << "read start coordinate: " << h_reads.start_[itr] << std::endl;
-        std::cout << "read end coordinate: " << h_reads.end_[itr] << std::endl;
-        std::cout << "read strand: " << h_reads.strand[itr] << std::endl;
-        std::cout << "read junction count: " << h_reads.core[itr].junctionCount << std::endl;
-        if (h_reads.core[itr].junctionCount != 0) {
-            std::cout << "read junctions: ";
-            for (int itj = 0; itj < h_reads.core[itr].junctionCount; itj++) {
-                std::cout << "N1: " << h_reads.core[itr].junctions[itj].start_ << " " <<
-                             "N2: " << h_reads.core[itr].junctions[itj].end_ << " ";
-            }
-            std::cout << std::endl;
-        }
-    }
-#endif
+//#ifdef DEBUG
+//    // print reads
+//    for (int itr = 0; itr < h_reads.start_.size(); itr++) {
+//        std::cout << "read start coordinate: " << h_reads.start_[itr] << std::endl;
+//        std::cout << "read end coordinate: " << h_reads.end_[itr] << std::endl;
+//        std::cout << "read strand: " << h_reads.strand[itr] << std::endl;
+//        std::cout << "read junction count: " << h_reads.core[itr].junctionCount << std::endl;
+//        if (h_reads.core[itr].junctionCount != 0) {
+//            std::cout << "read junctions: ";
+//            for (int itj = 0; itj < h_reads.core[itr].junctionCount; itj++) {
+//                std::cout << "N1: " << h_reads.core[itr].junctions[itj].start_ << " " <<
+//                             "N2: " << h_reads.core[itr].junctions[itj].end_ << " ";
+//            }
+//            std::cout << std::endl;
+//        }
+//    }
+//#endif
 }
 
 void LoadDataFromSerialization(h_Bins &h_bins, h_ASEs &h_ases) {
@@ -512,6 +562,23 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 	    //junctionSet.clear();
 	}
     }
+#ifdef DEBUG
+    // print reads
+    for (int itr = 0; itr < h_reads.start_.size(); itr++) {
+        std::cout << "read start coordinate: " << h_reads.start_[itr] << std::endl;
+        std::cout << "read end coordinate: " << h_reads.end_[itr] << std::endl;
+        std::cout << "read strand: " << h_reads.strand[itr] << std::endl;
+        std::cout << "read junction count: " << h_reads.core[itr].junctionCount << std::endl;
+        if (h_reads.core[itr].junctionCount != 0) {
+            std::cout << "read junctions: ";
+            for (int itj = 0; itj < h_reads.core[itr].junctionCount; itj++) {
+                std::cout << "N1: " << h_reads.core[itr].junctions[itj].start_ << " " <<
+                          "N2: " << h_reads.core[itr].junctions[itj].end_ << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
+#endif
 bam_destroy1(b);
 }
 

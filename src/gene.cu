@@ -32,7 +32,7 @@ d_Reads gpu_chipMallocRead(h_Reads &h_reads, int32_t numOfRead)
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&(d_reads.end_), sizeof(uint64_t) * numOfRead));
     CUDA_SAFE_CALL(
-        cudaMalloc((void **)&(d_reads.strand), sizeof(uint8_t) * numOfRead));
+        cudaMalloc((void **)&(d_reads.strand), sizeof(uint32_t) * numOfRead));
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&(d_reads.core), sizeof(read_core_t) * numOfRead));
 
@@ -43,7 +43,7 @@ d_Reads gpu_chipMallocRead(h_Reads &h_reads, int32_t numOfRead)
                               sizeof(uint64_t) * numOfRead,
                               cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_reads.strand, h_reads.strand.data(),
-                              sizeof(uint8_t) * numOfRead,
+                              sizeof(uint32_t) * numOfRead,
                               cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_reads.core, h_reads.core.data(),
                               sizeof(read_core_t) * numOfRead,
@@ -66,7 +66,7 @@ d_ASEs gpu_chipMallocASE(h_ASEs &h_ases, int32_t numOfASE)
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&(d_ases.end_), sizeof(uint64_t) * numOfASE));
     CUDA_SAFE_CALL(
-        cudaMalloc((void **)&(d_ases.strand), sizeof(uint8_t) * numOfASE));
+        cudaMalloc((void **)&(d_ases.strand), sizeof(uint32_t) * numOfASE));
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&(d_ases.core), sizeof(ase_core_t) * numOfASE));
 
@@ -77,7 +77,7 @@ d_ASEs gpu_chipMallocASE(h_ASEs &h_ases, int32_t numOfASE)
                               sizeof(uint64_t) * numOfASE,
                               cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_ases.strand, h_ases.strand.data(),
-                              sizeof(uint8_t) * numOfASE,
+                              sizeof(uint32_t) * numOfASE,
                               cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_ases.core, h_ases.core.data(),
                               sizeof(ase_core_t) * numOfASE,
@@ -100,7 +100,7 @@ d_Bins gpu_chipMallocBin(h_Bins &h_bins, int32_t numOfBin)
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&(d_bins.end_), sizeof(uint64_t) * numOfBin));
     CUDA_SAFE_CALL(
-        cudaMalloc((void **)&(d_bins.strand), sizeof(uint8_t) * numOfBin));
+        cudaMalloc((void **)&(d_bins.strand), sizeof(uint32_t) * numOfBin));
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&(d_bins.core), sizeof(bin_core_t) * numOfBin));
 
@@ -111,7 +111,7 @@ d_Bins gpu_chipMallocBin(h_Bins &h_bins, int32_t numOfBin)
                               sizeof(uint64_t) * numOfBin,
                               cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_bins.strand, h_bins.strand.data(),
-                              sizeof(uint8_t) * numOfBin,
+                              sizeof(uint32_t) * numOfBin,
                               cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_bins.core, h_bins.core.data(),
                               sizeof(bin_core_t) * numOfBin,
@@ -146,7 +146,7 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
         thrust::device_pointer_cast(d_reads.start_);
     thrust::device_ptr<uint64_t> d_ends =
         thrust::device_pointer_cast(d_reads.end_);
-    thrust::device_ptr<uint8_t> d_strands =
+    thrust::device_ptr<uint32_t> d_strands =
         thrust::device_pointer_cast(d_reads.strand);
     thrust::device_ptr<read_core_t> d_cores =
         thrust::device_pointer_cast(d_reads.core);

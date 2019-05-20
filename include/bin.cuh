@@ -33,19 +33,22 @@
     #error "can't find align directive."
 #endif
 
-#define SE_ANCHOR
+#define N_SE_ANCHOR
 #ifdef SE_ANCHOR
 const int anchorCount = 4;
 const int coordinateCount = 6;
 // serialization
 const char *serFilename = "../gencode_SE.ser";
-#else
-#ifdef RI_ANCHOR
+#elif defined(N_SE_ANCHOR)
+const int anchorCount = 4;
+const int coordinateCount = 6;
+// serialization
+const char *serFilename = "../gencode_NSE.ser";
+#elif defined(RI_ANCHOR)
 const int anchorCount = 2;
 const int coordinateCount = 4;
 // serialization
 const char *serFilename = "../gencode_RI.ser";
-#endif
 #endif
 
 typedef unsigned char uint8_t;
@@ -96,14 +99,14 @@ struct ALIGN(8) read_core_t {
 struct h_Reads {
     std::vector<uint64_t > start_;
     std::vector<uint64_t > end_;
-    std::vector<uint8_t > strand;
+    std::vector<uint32_t > strand;
     std::vector<read_core_t > core;
 };
 
 struct d_Reads {
     uint64_t *start_;
     uint64_t *end_;
-    uint8_t *strand;
+    uint32_t *strand;
 
     read_core_t *core;
 };
@@ -170,14 +173,14 @@ struct h_Bins {
 
     std::vector<uint64_t > start_;
     std::vector<uint64_t > end_;
-    std::vector<uint8_t > strand;
+    std::vector<uint32_t > strand;
     std::vector<bin_core_t > core;
 };
 
 struct d_Bins {
     uint64_t *start_;                          // absolute starting coordinate of bin
     uint64_t *end_;
-    uint8_t *strand;
+    uint32_t *strand;
 
     bin_core_t *core;
 };
@@ -215,14 +218,14 @@ struct h_ASEs {
 
     std::vector<uint64_t > start_;
     std::vector<uint64_t > end_;
-    std::vector<uint8_t > strand;
+    std::vector<uint32_t > strand;
     std::vector<ase_core_t > core;
 };
 
 struct d_ASEs {
     uint64_t *start_;
     uint64_t *end_;
-    uint8_t *strand;
+    uint32_t *strand;
 
     ase_core_t *core;
 };
