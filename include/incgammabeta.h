@@ -58,6 +58,7 @@ __device__ double betacf(const double a, const double b, const double x)
     if (fabs(d) < FPMIN) d = FPMIN;
     d = 1.0 / d;
     h = d;
+    #pragma unroll
     for (m = 1; m < 10000; m++) {
         m2 = 2 * m;
         aa = m * (b - m) * x / ((qam + m2) * (a + m2));
@@ -134,6 +135,7 @@ __device__ double invbetai(double p, double a, double b)
             x = 1. - pow(b * w * (1. - p), 1. / b);
     }
     afac = -lgammaf(a) - lgammaf(b) + lgammaf(a + b);
+    #pragma unroll
     for (j = 0; j < 10; j++) {
         if (x == 0. || x == 1.) return x;
         err = betai(a, b, x) - p;

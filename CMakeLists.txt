@@ -22,7 +22,7 @@ set(GPU_ARCHITECTURE "sm_61" CACHE STRING "Target GPU architecture")
 set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda-9.2")
 set(CUDA_LIBRARY_DIR /usr/local/cuda-9.2/lib64/)
 
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} ${CUDA_NVCC_DEBUG_FLAGS} -g -G -arch=${GPU_ARCHITECTURE} -use_fast_math)
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} ${CUDA_NVCC_DEBUG_FLAGS} -arch=${GPU_ARCHITECTURE} -use_fast_math)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 

@@ -18,9 +18,9 @@ __device__ void gpu_try_assign_kernel(uint64_t bin_start, uint64_t bin_end,
         if (start < bin_start) left = mid_l + 1;
         else right = mid_l;
     }
-    while(right>0 and d_starts[right]==d_starts[right-1]){
-	right = right-1;
-	}
+    //while(right>0 and d_starts[right]==d_starts[right-1]){
+    //	right = right-1;
+    //	}
     if (left != numOfEntry) d_assist[id].start_ = right;
     else {
         d_assist[id].start_ = d_assist[id].end_ = 0;
@@ -35,9 +35,9 @@ __device__ void gpu_try_assign_kernel(uint64_t bin_start, uint64_t bin_end,
         if (start < bin_end) left = mid_r + 1;
         else right = mid_r;
     }
-    while(left<numOfEntry and d_starts[left]==d_starts[left+1]){
-	left = left+1;
-	}
+    //while(left<numOfEntry and d_starts[left]==d_starts[left+1]){
+    //	left = left+1;
+    //	}
 
     if (left) d_assist[id].end_ = left;
     else {

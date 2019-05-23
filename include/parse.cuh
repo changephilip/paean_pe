@@ -335,6 +335,8 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
     int32_t bam_core_stack_count = 0;
     //#ifdef PAIR_END
     uint32_t start_pos, end_pos;
+    uint64_t njread_start,njread_end;
+    bool strand_t;
     //#endif
     std::string qname_reg;
     while (sam_read1(fp, header, b) >= 0) {
@@ -377,7 +379,12 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 			    start_posList.push_back((b->core).pos + offset + 1);
 			    end_posList.push_back(bam_endpos(b) + offset + 1);
 			}
+
 			prev = prev + (cigars[i] >> 4);
+		    }
+                    if (JunctionList.size()==0){
+			njread_start = (b->core).pos + offset +1;
+                        njread_end = bam_endpos(b) + offset +1;
 		    }
 		    std::string tmp_qname = (char *)qname[(b->core).tid];
 		    chrList.insert(tmp_qname);
@@ -385,7 +392,7 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 		    // if the next qname
 		    std::string qname_string;
 		    qname_string = (char *)(b->data);
-		    if (!qname_string.compare(qname_reg)) {
+		    if (qname_string.compare(qname_reg)==0) {
 			for (int i = 1; i < (b->core).n_cigar; i++) {
 			    if ((cigars[i] & 15) == 3) {
 				junctionInline tempJ;
@@ -399,13 +406,18 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 			    }
 			    prev = prev + (cigars[i] >> 4);
 			}
+		    	if (JunctionList.size()==0){
+			    njread_start = (b->core).pos + offset +1;
+                            njread_end = bam_endpos(b) + offset +1;
+		    	}
 			std::string tmp_qname = (char *)qname[(b->core).tid];
 			chrList.insert(tmp_qname);
 		    } else {
 			// To strike the JunctionList
 			// unique chrList to determine whether only mapping to
 			// one chromosome
-			if (chrList.size() == 1 and JunctionList.size()!=0) {
+			if (chrList.size() == 1) {
+                            if (JunctionList.size()!=0){
 			    read_core_t read_core;
 			    int32_t delta[start_posList.size()];
 			    std::vector<junctionInline>::iterator it;
@@ -443,6 +455,14 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 
 			    h_reads.core.push_back(read_core);
 			    //junctionSet.clear();
+			    }
+                            else{
+				h_reads.start_.push_back(njread_start);
+                                h_reads.end_.push_back(njread_end);
+                                h_reads.strand.push_back((uint32_t)(!bam_is_rev(b)));
+                                read_core_t read_core;
+                                h_reads.core.push_back(read_core);
+			    }
 			}
 			chrList.clear();
 			qname_reg = qname_string;
@@ -461,6 +481,10 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 						      1);
 			    }
 			    prev = prev + (cigars[i] >> 4);
+			}
+                        if (JunctionList.size()==0){
+			    njread_start = (b->core).pos + offset +1;
+                            njread_end = bam_endpos(b) + offset +1;
 			}
 		        std::string tmp_qname = (char *)qname[(b->core).tid];
 			chrList.insert(tmp_qname);
@@ -511,9 +535,17 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 	    end_posList.clear();
 	    //junctionSet.clear();
 	}
-    }
+    }else{
+	h_reads.start_.push_back(njread_start);
+        h_reads.end_.push_back(njread_end);
+        h_reads.strand.push_back((uint32_t)(true));
+        read_core_t read_core;
+        h_reads.core.push_back(read_core);
+
+	}
 bam_destroy1(b);
-/*std::vector<uint64_t> s_reads_s(h_reads.start_.size());
+/*
+std::vector<uint64_t> s_reads_s(h_reads.start_.size());
 std::copy(h_reads.start_.beign(),h_reads.start_.end(),s_reads_s.begin());
 std::sort(s_reads_s.begin(),s_reads_s.end());
 
@@ -525,22 +557,15 @@ std::multimap<uint64_t,std::pair<uint64_t,read_core_t>> s_map;
 for (int32_t i=0;i<h_reads.start_.size();i++){
 	s_map.insert(std::pair<uint64_t,std::pair<uint64_t,read_core_t>>(h_reads.start_[i],std::pair<uint64_t,read_core_t>(h_reads.end_[i],h_reads.core[i])));
 }
-*/
 FILE *f;
 f=fopen("/home/qianjiaqiang/h.txt","w");
-/*
-if (f!=NULL){
-	for (std::multimap<uint64_t,std::pair<uint64_t,read_core_t>>::iterator iter = s_map.begin();iter!=s_map.end();++iter){
-		fprintf(f,"%lu\t%lu\t%lu\t%lu\n",iter->first,(iter->second).first,(iter->second).second.junctions[0].start_,(iter->second).second.junctions[0].end_);	
-	}
-}
-*/
 if (f!=NULL){
 	for (uint32_t i=0;i < h_reads.start_.size();i++){
 		fprintf(f,"%lu\t%lu\t%lu\t%lu\t%lu\t%d\n",h_reads.start_[i],h_reads.end_[i],h_reads.strand[i],h_reads.core[i].junctions[0].start_,h_reads.core[i].junctions[0].end_,i);
 	}
 }
 fclose(f);
+*/
 }
 
 

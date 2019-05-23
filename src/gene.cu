@@ -193,7 +193,8 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
     cudaFree(gatmp_c);
     cudaFree(d_ind);
     delete[] ind;
-
+	
+    /*
     uint64_t *ds_read_s;
     uint64_t *ds_read_e;
     uint8_t *ds_t;
@@ -216,6 +217,8 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
     delete[] ds_read_e;
     delete[] ds_read_c;
     delete[] ds_t;
+    */
+
     // copy bins to device global memory
     d_Bins d_bins = gpu_chipMallocBin(h_bins, numOfBin);
 
@@ -320,7 +323,7 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
     CUDA_SAFE_CALL(cudaMalloc((void **)&d_psi_ub, numOfASE * sizeof(float)));
     CUDA_SAFE_CALL(cudaMalloc((void **)&d_psi_lb, numOfASE * sizeof(float)));
     std::cout << "starting calculating beta.inv psi..." << std::endl;
-    gpu_post_PSI<<<nBlock * 2, blockSize / 2>>>(d_ase_psi, ACT, d_psi_ub,
+    gpu_post_PSI<<<nBlock * 4, blockSize / 4>>>(d_ase_psi, ACT, d_psi_ub,
                                                 d_psi_lb, numOfASE);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     CUDA_SAFE_CALL(cudaMemcpy(psi_ub, d_psi_ub, numOfASE * sizeof(float),
@@ -386,6 +389,7 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
     delete[] psi_ub;
     delete[] psi_lb;
 #endif
+    /*
     int32_t *h_r2b_s;
     int32_t *h_r2b_e;
     h_r2b_s = new int32_t[numOfBin];
@@ -400,6 +404,8 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
     fclose(d);
     delete[] h_r2b_s;
     delete[] h_r2b_e;
+    */
+
     // free memory
     std::cout << "free memory..." << std::endl;
     cudaFree(d_ase_psi);
