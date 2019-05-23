@@ -18,7 +18,10 @@ __device__ void gpu_try_assign_kernel(uint64_t bin_start, uint64_t bin_end,
         if (start < bin_start) left = mid_l + 1;
         else right = mid_l;
     }
-    if (left != numOfEntry) d_assist[id].start_ = left;
+    while(right>0 and d_starts[right]==d_starts[right-1]){
+	right = right-1;
+	}
+    if (left != numOfEntry) d_assist[id].start_ = right;
     else {
         d_assist[id].start_ = d_assist[id].end_ = 0;
         return;
@@ -32,6 +35,10 @@ __device__ void gpu_try_assign_kernel(uint64_t bin_start, uint64_t bin_end,
         if (start < bin_end) left = mid_r + 1;
         else right = mid_r;
     }
+    while(left<numOfEntry and d_starts[left]==d_starts[left+1]){
+	left = left+1;
+	}
+
     if (left) d_assist[id].end_ = left;
     else {
         d_assist[id].start_ = d_assist[id].end_ = 0;
@@ -250,6 +257,9 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
         );
         */
         //__threadfence();
+        if (aseId == 17){
+            printf("16\n");
+	}
 
         // for calc psi
         coord = d_ases.core[aseId].coordinates;
@@ -352,7 +362,9 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
      float countOut;
      float countIn, psi;
      ASECounter act;
-
+     if (aseId == 17){
+	printf("aseId 17");
+	}
      if (aseId < numOfASE) {
         act = ACT[aseId];
 #ifdef SE_ANCHOR
@@ -433,5 +445,12 @@ __global__ void gpu_post_PSI(ASEPsi *d_ase_psi,ASECounter *ACT, float *PSI_UB,
     }
 }
 #endif
-
+template <class T>
+__global__ void gather(int* indices,T *source,T *out,uint32_t numOfEntry){
+	int32_t threadId = blockDim.x * blockIdx.x + threadIdx.x;
+	if (threadId < numOfEntry){
+		int32_t targetId= indices[threadId];
+		out[threadId] = source[targetId];
+	}		
+}
 #endif //CHIP_BIN_KERNEL_H

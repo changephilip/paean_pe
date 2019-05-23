@@ -14,7 +14,7 @@
 #include <vector>
 #include <stack>
 #include <set>
-
+#include <map>
 // global variables
 typedef std::unordered_map<size_t, std::string> UMAP;
 typedef std::unordered_map<size_t, size_t> NMAP;
@@ -513,6 +513,34 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 	}
     }
 bam_destroy1(b);
+/*std::vector<uint64_t> s_reads_s(h_reads.start_.size());
+std::copy(h_reads.start_.beign(),h_reads.start_.end(),s_reads_s.begin());
+std::sort(s_reads_s.begin(),s_reads_s.end());
+
+std::vector<uint64_t> s_reads_e(h_reads.end_.size());
+std::copy(h_reads.end_.beign(),h_reads.end_.end(),s_reads_e.begin());
+std::sort(s_reads_e.begin(),s_reads_e.end());
+
+std::multimap<uint64_t,std::pair<uint64_t,read_core_t>> s_map;
+for (int32_t i=0;i<h_reads.start_.size();i++){
+	s_map.insert(std::pair<uint64_t,std::pair<uint64_t,read_core_t>>(h_reads.start_[i],std::pair<uint64_t,read_core_t>(h_reads.end_[i],h_reads.core[i])));
+}
+*/
+FILE *f;
+f=fopen("/home/qianjiaqiang/h.txt","w");
+/*
+if (f!=NULL){
+	for (std::multimap<uint64_t,std::pair<uint64_t,read_core_t>>::iterator iter = s_map.begin();iter!=s_map.end();++iter){
+		fprintf(f,"%lu\t%lu\t%lu\t%lu\n",iter->first,(iter->second).first,(iter->second).second.junctions[0].start_,(iter->second).second.junctions[0].end_);	
+	}
+}
+*/
+if (f!=NULL){
+	for (uint32_t i=0;i < h_reads.start_.size();i++){
+		fprintf(f,"%lu\t%lu\t%lu\t%lu\t%lu\t%d\n",h_reads.start_[i],h_reads.end_[i],h_reads.strand[i],h_reads.core[i].junctions[0].start_,h_reads.core[i].junctions[0].end_,i);
+	}
+}
+fclose(f);
 }
 
 

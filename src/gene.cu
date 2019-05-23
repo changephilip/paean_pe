@@ -153,16 +153,69 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
 
     thrust::device_vector<int> d_indices((unsigned long)numOfRead);
     thrust::sequence(d_indices.begin(), d_indices.end(), 0, 1);
-    thrust::sort_by_key(thrust::device, d_starts, d_starts + numOfRead,
+    thrust::stable_sort_by_key(thrust::device, d_starts, d_starts + numOfRead,
                         d_indices.begin());
-
+    /*
     thrust::gather(thrust::device, d_indices.begin(), d_indices.end(), d_ends,
                    d_ends);
     thrust::gather(thrust::device, d_indices.begin(), d_indices.end(),
                    d_strands, d_strands);
     thrust::gather(thrust::device, d_indices.begin(), d_indices.end(), d_cores,
                    d_cores);
+    */
+    if (thrust::is_sorted(d_starts,d_starts+numOfRead)){
+	printf("sorted d_starts!\n");
+	}
+    
+    int* ind;
+    ind = new int[numOfRead];
+    for (uint32_t i=0;i<numOfRead;i++){ind[i] = d_indices[i];}
+    int* d_ind;
+    cudaMalloc((void **)&d_ind,sizeof(int)*numOfRead);
+    cudaMemcpy(d_ind,ind,sizeof(int)*numOfRead,cudaMemcpyHostToDevice);
+    uint64_t *gatmp_read_e;
+    uint8_t *gatmp_t;
+    read_core_t *gatmp_c;
+    cudaMalloc((void**)&gatmp_read_e,sizeof(uint64_t)*numOfRead); 
+    cudaMalloc((void**)&gatmp_t,sizeof(uint8_t)*numOfRead); 
+    cudaMalloc((void**)&gatmp_c,sizeof(read_core_t)*numOfRead);
+    cudaMemcpy(gatmp_read_e,d_reads.end_,numOfRead*sizeof(uint64_t),cudaMemcpyDeviceToDevice);
+    cudaMemcpy(gatmp_t,d_reads.strand,numOfRead*sizeof(uint8_t),cudaMemcpyDeviceToDevice);
+    cudaMemcpy(gatmp_c,d_reads.core,numOfRead*sizeof(read_core_t),cudaMemcpyDeviceToDevice);
 
+    gather<uint64_t><<<nBlock,blockSize>>>(d_ind,gatmp_read_e,d_reads.end_,numOfRead);
+    gather<uint8_t><<<nBlock,blockSize>>>(d_ind,gatmp_t,d_reads.strand,numOfRead);
+    gather<read_core_t><<<nBlock,blockSize>>>(d_ind,gatmp_c,d_reads.core,numOfRead);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    
+    cudaFree(gatmp_read_e);
+    cudaFree(gatmp_t);
+    cudaFree(gatmp_c);
+    cudaFree(d_ind);
+    delete[] ind;
+
+    uint64_t *ds_read_s;
+    uint64_t *ds_read_e;
+    uint8_t *ds_t;
+    read_core_t *ds_read_c;
+    ds_read_s = new uint64_t[numOfRead];
+    ds_read_e = new uint64_t[numOfRead];
+    ds_read_c = new read_core_t[numOfRead];
+    ds_t = new uint8_t[numOfRead];
+    cudaMemcpy(ds_read_s,d_reads.start_,numOfRead*sizeof(uint64_t),cudaMemcpyDeviceToHost);
+    cudaMemcpy(ds_read_e,d_reads.end_,numOfRead*sizeof(uint64_t),cudaMemcpyDeviceToHost);
+    cudaMemcpy(ds_read_c,d_reads.core,numOfRead*sizeof(read_core_t),cudaMemcpyDeviceToHost);
+    cudaMemcpy(ds_t,d_reads.strand,numOfRead*sizeof(uint8_t),cudaMemcpyDeviceToHost);
+    FILE *p;
+    p=fopen("/home/qianjiaqiang/dr.txt","w");
+    for (uint32_t i=0;i<numOfRead;i++){
+	fprintf(p,"%lu\t%lu\t%d\t%lu\t%lu\t%d\n",ds_read_s[i],ds_read_e[i],ds_t[i],ds_read_c[i].junctions[0].start_,ds_read_c[i].junctions[0].end_,int(d_indices[i]));
+    }
+    fclose(p);
+    delete[] ds_read_s;
+    delete[] ds_read_e;
+    delete[] ds_read_c;
+    delete[] ds_t;
     // copy bins to device global memory
     d_Bins d_bins = gpu_chipMallocBin(h_bins, numOfBin);
 
@@ -333,7 +386,20 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_ASEs &h_ases)
     delete[] psi_ub;
     delete[] psi_lb;
 #endif
-
+    int32_t *h_r2b_s;
+    int32_t *h_r2b_e;
+    h_r2b_s = new int32_t[numOfBin];
+    h_r2b_e = new int32_t[numOfBin];
+    cudaMemcpy(h_r2b_s,d_read2bin_start,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost); 
+    cudaMemcpy(h_r2b_e,d_read2bin_end,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost); 
+    FILE *d;
+    d = fopen("/home/qianjiaqiang/r2b.txt","w");
+    for (uint32_t i=0;i<numOfBin;i++){
+	fprintf(d,"%d\t%d\n",h_r2b_s[i],h_r2b_e[i]);
+	}
+    fclose(d);
+    delete[] h_r2b_s;
+    delete[] h_r2b_e;
     // free memory
     std::cout << "free memory..." << std::endl;
     cudaFree(d_ase_psi);
