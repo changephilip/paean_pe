@@ -257,9 +257,6 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
         );
         */
         //__threadfence();
-        if (aseId == 17){
-            printf("16\n");
-	}
 
         // for calc psi
         coord = d_ases.core[aseId].coordinates;

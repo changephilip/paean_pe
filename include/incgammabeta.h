@@ -59,7 +59,7 @@ __device__ double betacf(const double a, const double b, const double x)
     d = 1.0 / d;
     h = d;
     #pragma unroll
-    for (m = 1; m < 10000; m++) {
+    for (m = 1; m < 100; m++) {
         m2 = 2 * m;
         aa = m * (b - m) * x / ((qam + m2) * (a + m2));
         d = 1.0 + aa * d;
