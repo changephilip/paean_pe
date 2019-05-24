@@ -494,7 +494,6 @@ void LoadReadFromBam(h_Reads &h_reads, char *bam_file)
 	}
     }
     // after read all reads, process remains junctions in JunctionList
-    printf("hello world!\n");
     if (JunctionList.size() != 0) {
 	if (chrList.size() == 1) {
 	    read_core_t read_core;

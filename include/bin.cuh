@@ -38,7 +38,8 @@
 const int anchorCount = 4;
 const int coordinateCount = 6;
 // serialization
-const char *serFilename = "../gencode_SE.ser";
+//const char *serFilename = "../gencode_SE.ser";
+const char *serFilename = "../gencode_NSE.ser";
 #else
 #ifdef RI_ANCHOR
 const int anchorCount = 2;
