@@ -45,6 +45,33 @@ __device__ void gpu_try_assign_kernel(uint64_t bin_start, uint64_t bin_end,
     }
 }
 
+__global__ void gpu_assign_nj_read_kernel(d_Bins d_bins, int32_t numOfBin,
+                                       d_nj_Reads d_reads, int32_t numOfRead,
+                                       Assist *d_assist,int32_t *d_read2bin_start,int32_t *d_read2bin_end) {
+    int32_t binId = blockDim.x * blockIdx.x + threadIdx.x;
+    int temp = 0;
+
+    if (binId < numOfBin) {
+        // try assign
+        gpu_try_assign_kernel(
+            d_bins.start_[binId], d_bins.end_[binId],
+            binId, d_reads.start_, numOfRead, d_assist
+        );
+        __threadfence();
+        d_read2bin_start[binId] = d_assist[binId].start_;
+        d_read2bin_end[binId] = d_assist[binId].end_;
+        for (int readId = d_assist[binId].start_; readId < d_assist[binId].end_; readId++) {
+            if ((d_reads.strand[readId] != d_bins.strand[binId]) ||
+                    (d_reads.end_[readId] > d_bins.end_[binId])) temp++;
+        }
+        d_bins.core[binId].readCount  = d_assist[binId].end_ - d_assist[binId].start_ - temp;
+// #define DEBUG
+#ifdef DEBUG
+        printf("read count: %d\n", d_bins.core[binId].readCount);
+#endif
+    }
+}
+
 __global__ void gpu_assign_read_kernel(d_Bins d_bins, int32_t numOfBin,
                                        d_Reads d_reads, int32_t numOfRead,
                                        Assist *d_assist,int32_t *d_read2bin_start,int32_t *d_read2bin_end) {
@@ -64,7 +91,7 @@ __global__ void gpu_assign_read_kernel(d_Bins d_bins, int32_t numOfBin,
             if ((d_reads.strand[readId] != d_bins.strand[binId]) ||
                     (d_reads.end_[readId] > d_bins.end_[binId])) temp++;
         }
-        d_bins.core[binId].readCount = d_assist[binId].end_ - d_assist[binId].start_ - temp;
+        d_bins.core[binId].readCount += d_assist[binId].end_ - d_assist[binId].start_ - temp;
 // #define DEBUG
 #ifdef DEBUG
         printf("read count: %d\n", d_bins.core[binId].readCount);
