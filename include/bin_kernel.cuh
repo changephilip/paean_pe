@@ -379,6 +379,74 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
 #endif
     }
 }
+__global__ void gpu_assign_nj_read_ASE_kernel(d_ASEs d_ases, int32_t numOfASE,
+                                           d_nj_Reads d_reads, int32_t numOfRead,
+                                            Assist *d_assist, ASECounter *ACT,int32_t *d_bin2ase,int32_t * d_read2bin_start,int32_t *d_read2bin_end) {
+    int32_t aseId = blockDim.x * blockIdx.x + threadIdx.x;
+    uint32_t read_strand, ase_strand, junctionCount;
+    uint32_t read_s, read_e;
+    uint64_t junction_s, junction_e;
+    int32_t *coord;
+
+    if (aseId < numOfASE) {
+        // try assign
+        /*
+        gpu_try_assign_kernel(
+                d_ases.start_[aseId], d_ases.end_[aseId],
+                aseId, d_reads.start_, numOfRead, d_assist
+        );
+        */
+        //__threadfence();
+
+        // for calc psi
+        coord = d_ases.core[aseId].coordinates;
+        ACT[aseId].artRange.start_ = coord[2];
+        ACT[aseId].artRange.end_ = coord[3];
+        uint32_t binId;
+        binId = d_bin2ase[aseId];
+        // assign
+        //for (int readId = d_assist[binId].start_; readId < d_assist[binId].end_; readId++) {
+        for (int readId = d_read2bin_start[binId]; readId < d_read2bin_end[binId]; readId++) {
+            read_strand = d_reads.strand[readId];
+            ase_strand = d_ases.strand[aseId];
+            //if (read_strand == ase_strand) {
+            if ( true ) {
+                read_s = uint32_t(d_reads.start_[readId] & (refLength - 1));
+                read_e = uint32_t(d_reads.end_[readId] & (refLength - 1));
+#ifdef SE_ANCHOR
+                    // ART
+                    if ((read_s >= coord[2] && read_s <= coord[3]) ||
+                        (read_e >= coord[2] && read_e <= coord[3])) {
+                        ACT[aseId].anchor[3]++;
+                }
+#elif defined(RI_ANCHOR)
+                // JTAT
+                    // ART
+                    if (ase_strand) {
+                        if ((read_s >= coord[1] && read_s <= coord[2]) ||
+                            (read_e >= coord[1] && read_e <= coord[2])) {
+                            ACT[aseId].anchor[1]++;
+                        }
+                    } else {
+                        if ((read_s >= coord[2] && read_s <= coord[1]) ||
+                            (read_e >= coord[2] && read_e <= coord[1])) {
+                            ACT[aseId].anchor[1]++;
+                        }
+#endif
+            }
+        }
+//        if (d_ases.start_[aseId] == 764383L && d_ases.end_[aseId] == 787490L) {
+//            printf("%d %d\n", d_assist[aseId].end_, d_assist[aseId].start_);
+//            for (int i = 0; i < anchorCount; i++) printf("%d\n", ACT[aseId].anchor[i]);
+//        }
+// #define DEBUG
+#ifdef DEBUG
+    if (aseId == 0)
+        for (int i = 0; i < anchorCount; i++) printf("%d %d\n", aseId, ACT[aseId].anchor[i]);
+#endif
+    }
+}
+
 
  __global__ void gpu_count_PSI(d_ASEs d_ases, int32_t numOfASE,
                                ASEPsi *d_ase_psi, ASECounter *ACT) {

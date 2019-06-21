@@ -326,15 +326,24 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
         cudaMalloc((void **)&d_assist_reads, sizeof(Assist) * numOfBin));
     int32_t *d_read2bin_start;
     int32_t *d_read2bin_end;
+    int32_t *d_nj_read2bin_start;
+    int32_t *d_nj_read2bin_end;
+
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&d_read2bin_start, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-        cudaMalloc((void **)&d_read2bin_end, sizeof(int32_t) * numOfBin));
+            cudaMalloc((void **)&d_read2bin_end, sizeof(int32_t) * numOfBin));
+    CUDA_SAFE_CALL(
+                    cudaMalloc((void **)&d_nj_read2bin_start, sizeof(int32_t) * numOfBin));
+    CUDA_SAFE_CALL(
+            cudaMalloc((void **)&d_nj_read2bin_end, sizeof(int32_t) * numOfBin));
+
     // assign reads to bins
     std::cout << "starting assign reads..." << std::endl;
     gpu_assign_nj_read_kernel<<<nBlock, blockSize>>>(
-        d_bins, numOfBin, d_nj_reads, numOfRead, d_assist_reads, d_read2bin_start,
-        d_read2bin_end);
+        d_bins, numOfBin, d_nj_reads, numOfRead, d_assist_reads, d_nj_read2bin_start,
+        d_nj_read2bin_end);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
     gpu_assign_read_kernel<<<nBlock, blockSize>>>(
         d_bins, numOfBin, d_reads, numOfRead, d_assist_reads, d_read2bin_start,
         d_read2bin_end);
@@ -389,6 +398,10 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     std::cout << "starting assign reads to ases..." << std::endl;
     // gpu_assign_read_ASE_kernel<<<nBlock, blockSize>>>(
     //   d_ases, numOfASE, d_reads, numOfRead, d_assist_read_ases, ACT);
+    gpu_assign_nj_read_ASE_kernel<<<nBlock, blockSize>>>(
+        d_ases, numOfASE, d_nj_reads, numOf_nj_Read, d_assist_read_ases, ACT,
+        d_bin2ase, d_nj_read2bin_start, d_nj_read2bin_end);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
     gpu_assign_read_ASE_kernel2<<<nBlock, blockSize>>>(
         d_ases, numOfASE, d_reads, numOfRead, d_assist_read_ases, ACT,
         d_bin2ase, d_read2bin_start, d_read2bin_end);
@@ -517,6 +530,8 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     cudaFree(d_assist_read_ases);
     cudaFree(d_read2bin_start);
     cudaFree(d_read2bin_end);
+    cudaFree(d_nj_read2bin_start);
+    cudaFree(d_nj_read2bin_end);
     cudaFree(d_bin2ase);
     delete[] tpmStore;
 }
