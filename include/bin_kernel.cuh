@@ -397,7 +397,6 @@ __global__ void gpu_assign_nj_read_ASE_kernel(d_ASEs d_ases, int32_t numOfASE,
         );
         */
         //__threadfence();
-
         // for calc psi
         coord = d_ases.core[aseId].coordinates;
         ACT[aseId].artRange.start_ = coord[2];
@@ -454,9 +453,6 @@ __global__ void gpu_assign_nj_read_ASE_kernel(d_ASEs d_ases, int32_t numOfASE,
      float countOut;
      float countIn, psi;
      ASECounter act;
-     if (aseId == 17){
-	printf("aseId 17");
-	}
      if (aseId < numOfASE) {
         act = ACT[aseId];
 #ifdef SE_ANCHOR

@@ -223,12 +223,13 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     cudaMemcpy(gatmp_c, d_reads.core, numOfRead * sizeof(read_core_t),
                cudaMemcpyDeviceToDevice);
 
+    unsigned nReadBlock = (unsigned(numOfRead) + blockSize - 1) / blockSize;
     gather<uint64_t>
-        <<<nBlock, blockSize>>>(d_ind, gatmp_read_e, d_reads.end_, numOfRead);
+        <<<nReadBlock, blockSize>>>(d_ind, gatmp_read_e, d_reads.end_, numOfRead);
     gather<uint8_t>
-        <<<nBlock, blockSize>>>(d_ind, gatmp_t, d_reads.strand, numOfRead);
+        <<<nReadBlock, blockSize>>>(d_ind, gatmp_t, d_reads.strand, numOfRead);
     gather<read_core_t>
-        <<<nBlock, blockSize>>>(d_ind, gatmp_c, d_reads.core, numOfRead);
+        <<<nReadBlock, blockSize>>>(d_ind, gatmp_c, d_reads.core, numOfRead);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
     cudaFree(gatmp_read_e);
@@ -279,9 +280,9 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
                cudaMemcpyDeviceToDevice);
 
     gather<uint64_t>
-        <<<nBlock, blockSize>>>(d_nj_ind, gatmp_read_e_nj, d_nj_reads.end_, numOf_nj_Read);
+        <<<nReadBlock, blockSize>>>(d_nj_ind, gatmp_read_e_nj, d_nj_reads.end_, numOf_nj_Read);
     gather<uint8_t>
-        <<<nBlock, blockSize>>>(d_nj_ind, gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read);
+        <<<nReadBlock, blockSize>>>(d_nj_ind, gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
     cudaFree(gatmp_read_e_nj);
