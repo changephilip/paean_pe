@@ -534,10 +534,10 @@ __global__ void gpu_post_PSI(ASEPsi *d_ase_psi,ASECounter *ACT, float *PSI_UB,
 }
 #endif
 template <class T>
-__global__ void gather(int* indices,T *source,T *out,uint32_t numOfEntry){
-	int32_t threadId = blockDim.x * blockIdx.x + threadIdx.x;
+__global__ void gather(uint32_t* indices,T *source,T *out,uint32_t numOfEntry){
+	uint32_t threadId = blockDim.x * blockIdx.x + threadIdx.x;
 	if (threadId < numOfEntry){
-		int32_t targetId= indices[threadId];
+		uint32_t targetId= indices[threadId];
 		out[threadId] = source[targetId];
 	}		
 }
