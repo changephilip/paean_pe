@@ -26,6 +26,117 @@ int32_t nextPow2(int32_t x)
     x |= x >> 16;
     return ++x;
 }
+__inline__ void h_setNoneZero(uint32_t *bitmap, uint32_t N)
+{
+    //bitmap[N >> 5] |= (0x80000000 >> (N & 31));
+    bitmap[N >> 5] |= (0x80000000 >> (N & 31));
+}
+__inline__ void h_setNoneZeroRoll(uint32_t *bitmap,
+                                                uint32_t start, uint32_t end)
+{
+//#pragma unroll
+    for (uint32_t i = start; i < end; i++) {
+        h_setNoneZero(bitmap, i);
+    }
+}
+
+__inline__ uint32_t h_popbuf(uint32_t *bitmap, uint32_t N)
+{
+    uint32_t sum ;
+    sum = 0;
+//#pragma unroll
+    for (uint32_t i = 0; i < N ; i++) {
+        //sum += __popc(bitmap[i]);
+        sum += __builtin_popcount(bitmap[i]);
+    }
+    return sum;
+}
+
+void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
+                                  int32_t *d_read2bin_end, int32_t numOfRead,
+                                  int32_t *d_nj_read2bin_start,
+                                  int32_t *d_nj_read2bin_end,
+                                  int32_t numOf_nj_read, h_Reads d_reads,
+                                  h_nj_Reads d_nj_reads, int32_t *d_bin_length,
+                                  int32_t numOfBin)
+{
+    uint32_t binId;
+    uint64_t bin_start, bin_end;
+    uint32_t junctionCount, N, n,reads, reade;
+    uint32_t *bin_buf;
+    bin_buf = new uint32_t[150000];
+//#pragma omp parallel for num_threads(12)
+    for(binId=0;binId<numOfBin;binId++)
+    {
+	bin_start = d_bins.start_[binId] & (refLength - 1);
+        bin_end = d_bins.end_[binId] & (refLength - 1);
+        N = bin_end - bin_start + 1;
+        n = N/32+1;
+        memset(bin_buf,0,sizeof(uint32_t)*150000);
+        for (int32_t readId = d_read2bin_start[binId];
+             readId < d_read2bin_end[binId]; readId++) {
+            junctionCount = d_reads.core[readId].junctionCount;
+            reads = uint32_t(d_reads.start_[readId] & (refLength - 1));
+            reade = uint32_t(d_reads.end_[readId] & (refLength - 1));
+            if (junctionCount) {
+                int32_t flag=0;
+                for (int32_t jId=0;jId<junctionCount;jId++){
+                        if (reade -bin_start+1> N){flag+=1;break;}
+			if (d_reads.core[readId].junctions[jId].start_+reads-1-bin_start>N or d_reads.core[readId].junctions[jId].end_+reads-1-bin_start >N){
+                                flag+=1;
+				break;
+			}
+		}
+                if (flag==0)
+		{
+                for (int32_t jId = 0; jId <= junctionCount; jId++) {
+                    if (jId == 0) {
+                        uint32_t s=reads-bin_start;
+                        uint32_t e=d_reads.core[readId].junctions[jId].start_ +
+                                       reads - 1-bin_start;
+			//if (e > N or s>N){
+			//	printf("binId\treadId\tjId\ts\te\tN\n");
+                         //       printf("%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
+			//}
+                        h_setNoneZeroRoll(bin_buf,s,e);
+                    } 
+		    if (jId == junctionCount) {
+			uint32_t s=d_reads.core[readId].junctions[jId - 1].end_ +
+                                reads - 1-bin_start;
+
+                        uint32_t e=reade-bin_start;
+			//if (e > N or s>N){
+			//	printf("binId\treadId\tjId\ts\te\tN\n");
+                         //       printf("%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
+			//}
+			h_setNoneZeroRoll(bin_buf,s,e);
+                    } 
+		    if (jId!=0 and jId!=junctionCount ){
+ 			uint32_t s=d_reads.core[readId].junctions[jId - 1].end_ +
+                                reads - 1-bin_start;
+			uint32_t e=d_reads.core[readId].junctions[jId].start_ + reads -
+                                1-bin_start;
+			//if (e > N or s>N){
+			//	printf("binId\treadId\tjId\ts\te\tN\n");
+                         //       printf("%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
+			//}
+                            h_setNoneZeroRoll(bin_buf,s,e);
+                    	}
+                   }
+		}
+            }
+        }
+//#pragma unroll
+        for (int32_t readId = d_nj_read2bin_start[binId];
+             readId < d_nj_read2bin_end[binId]; readId++) {
+            reads = uint32_t(d_nj_reads.start_[readId] & (refLength - 1));
+            reade = uint32_t(d_nj_reads.end_[readId] & (refLength - 1));
+            h_setNoneZeroRoll(bin_buf, reads-bin_start, reade-bin_start);
+        }
+        d_bin_length[binId] = h_popbuf(bin_buf, n);
+    }
+    delete[] bin_buf;
+}
 
 d_Reads gpu_chipMallocRead(h_Reads &h_reads, int32_t numOfRead)
 {
@@ -372,6 +483,7 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     gpu_count_tempTPM<<<nBlock, blockSize>>>(d_bins, numOfBin, d_tempTPM);
     reduceSinglePass(static_cast<int>(numOfBin), blockSize,
                      static_cast<int>(tpmSize), d_tempTPM, d_tpmCounter);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
     gpu_count_TPM<<<nBlock, blockSize>>>(d_bins, numOfBin, d_tempTPM,
                                          d_tpmCounter, d_tpmStore);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
@@ -982,6 +1094,15 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     cudaFree(d_start_in);
     delete[] ind;
 
+    cudaMemcpy(h_reads.start_.data(), d_reads.start_, numOfRead * sizeof(uint64_t),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_reads.end_.data(), d_reads.end_, numOfRead * sizeof(uint64_t),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_reads.strand.data(), d_reads.strand, numOfRead * sizeof(uint8_t),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_reads.core.data(), d_reads.core, numOfRead * sizeof(read_core_t),
+               cudaMemcpyDeviceToHost);
+
     std::cout << "starting sorting nj_reads..." << std::endl;
 
     uint32_t *nj_indices;
@@ -1026,7 +1147,13 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     cudaFree(d_nj_start_in);
     cudaFree(d_temp_storage);
     delete[] nj_indices;
-    
+    cudaMemcpy(h_nj_reads.start_.data(), d_nj_reads.start_, numOf_nj_Read * sizeof(uint64_t),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_nj_reads.end_.data(), d_nj_reads.end_, numOf_nj_Read * sizeof(uint64_t),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_nj_reads.strand.data(), d_nj_reads.strand, numOf_nj_Read * sizeof(uint8_t),
+               cudaMemcpyDeviceToHost);
+   
     std::cout << "end sorting nj_reads..." << std::endl;
     /*
     uint64_t *ds_read_s;
@@ -1102,11 +1229,45 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     float *d_tpmStore;
     CUDA_SAFE_CALL(cudaMalloc((void **)&d_tpmStore, numOfBin * sizeof(float)));
     int32_t *d_bin_length;
-    CUDA_SAFE_CALL(cudaMalloc((void**)&d_bin_length,numOfBin *sizeof(int32_t)));
+    CUDA_SAFE_CALL(cudaMalloc((void **)&d_bin_length,numOfBin *sizeof(int32_t)));
     std::cout << "starting count tpm..." << std::endl;
-    modify_bin_length<<<nBlock,blockSize>>>(d_bins,d_read2bin_start,d_read2bin_end,numOfRead,d_nj_read2bin_start,d_nj_read2bin_end,numOf_nj_Read,d_reads,d_nj_reads,d_bin_length,numOfBin);
+    //cudaThreadSetLimit(cudaLimitMallocHeapSize, 1024*1024*1024);
+    //modify_bin_length<<<nBlock*64,blockSize/64>>>(d_bins,d_read2bin_start,d_read2bin_end,numOfRead,d_nj_read2bin_start,d_nj_read2bin_end,numOf_nj_Read,d_reads,d_nj_reads,d_bin_length,numOfBin);
+    //modify_bin_length<<<1,2>>>(d_bins,d_read2bin_start,d_read2bin_end,numOfRead,d_nj_read2bin_start,d_nj_read2bin_end,numOf_nj_Read,d_reads,d_nj_reads,d_bin_length,numOfBin);
+    int32_t *bin_length;
+    bin_length = new int32_t[numOfBin];
+
+    int32_t *read2bin_start,*read2bin_end,*nj_read2bin_start,*nj_read2bin_end;
+    read2bin_start = new int32_t[numOfBin];
+    read2bin_end = new int32_t[numOfBin];
+    nj_read2bin_start = new int32_t[numOfBin];
+    nj_read2bin_end = new int32_t[numOfBin];
+    
+    CUDA_SAFE_CALL(cudaMemcpy(read2bin_start,d_read2bin_start,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(read2bin_end,d_read2bin_end,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(nj_read2bin_start,d_nj_read2bin_start,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(nj_read2bin_end,d_nj_read2bin_end,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost));
+
+
+    modify_bin_length_host(h_bins,read2bin_start,read2bin_end,numOfRead,nj_read2bin_start,nj_read2bin_end,numOf_nj_Read,h_reads,h_nj_reads,bin_length,numOfBin);
+    CUDA_SAFE_CALL(cudaMemcpy(d_bin_length,bin_length,sizeof(int32_t)*numOfBin,cudaMemcpyHostToDevice));
+    delete[] bin_length;
+    delete[] read2bin_start;
+    delete[] read2bin_end;
+    delete[] nj_read2bin_start;
+    delete[] nj_read2bin_end;
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
+
     gpu_count_tempTPM_new<<<nBlock, blockSize>>>(d_bins, numOfBin, d_tempTPM,d_bin_length);
+    //sum d_tempTPM
+    float *tempTPM;
+    float tpmsum=0.0f;
+    tempTPM = new float[numOfBin];
+    cudaMemcpy(tempTPM,d_tempTPM,sizeof(float)*numOfBin,cudaMemcpyDeviceToHost);
+    for (uint32_t i=0;i<numOfBin;i++){
+	tpmsum+=tempTPM[i];
+	}
+    delete[] tempTPM; 
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     reduceSinglePass(static_cast<int>(numOfBin), blockSize,
                      static_cast<int>(tpmSize), d_tempTPM, d_tpmCounter);

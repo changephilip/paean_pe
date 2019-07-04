@@ -15,14 +15,14 @@ else()
     message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/home/qianjiaqiang/cub/cub -fstack-protector -D_FORCE_INLINES")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -I/home/qianjiaqiang/cub/cub -fstack-protector -D_FORCE_INLINES")
 
-set(GPU_ARCHITECTURE "sm_61" CACHE STRING "Target GPU architecture")
+set(GPU_ARCHITECTURE "sm_75" CACHE STRING "Target GPU architecture")
 
 set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda-9.2")
 set(CUDA_LIBRARY_DIR /usr/local/cuda-9.2/lib64/)
 
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} ${CUDA_NVCC_DEBUG_FLAGS} -g -G -arch=${GPU_ARCHITECTURE} -use_fast_math -I/home/qianjiaqiang/cub/cub)
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} ${CUDA_NVCC_DEBUG_FLAGS} -arch=${GPU_ARCHITECTURE} -use_fast_math -I/home/qianjiaqiang/cub/cub)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
