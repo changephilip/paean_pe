@@ -1065,36 +1065,40 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     cudaMalloc(&d_temp_storage,temp_storage_bytes);    
     cub::DeviceRadixSort::SortPairs(d_temp_storage,temp_storage_bytes,d_start_in,d_reads.start_,d_indices_in,d_indices,numOfRead);
 
-    
-    uint64_t *gatmp_read_e;
-    uint8_t *gatmp_t;
-    read_core_t *gatmp_c;
-    cudaMalloc((void **)&gatmp_read_e, sizeof(uint64_t) * numOfRead);
-    cudaMalloc((void **)&gatmp_t, sizeof(uint8_t) * numOfRead);
-    cudaMalloc((void **)&gatmp_c, sizeof(read_core_t) * numOfRead);
-    cudaMemcpy(gatmp_read_e, d_reads.end_, numOfRead * sizeof(uint64_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(gatmp_t, d_reads.strand, numOfRead * sizeof(uint8_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(gatmp_c, d_reads.core, numOfRead * sizeof(read_core_t),
-               cudaMemcpyDeviceToDevice);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    cudaFree(d_temp_storage);
+    cudaFree(d_indices_in);
+    cudaFree(d_start_in);
 
     unsigned nReadBlock = (unsigned(numOfRead) + blockSize - 1) / blockSize;
+
+    uint64_t *gatmp_read_e;
+    cudaMalloc((void **)&gatmp_read_e, sizeof(uint64_t) * numOfRead);
+    cudaMemcpy(gatmp_read_e, d_reads.end_, numOfRead * sizeof(uint64_t),
+               cudaMemcpyDeviceToDevice);
     gather<uint64_t>
         <<<nReadBlock, blockSize>>>(d_indices, gatmp_read_e, d_reads.end_, numOfRead);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    cudaFree(gatmp_read_e);
+    
+    uint8_t *gatmp_t;
+    cudaMalloc((void **)&gatmp_t, sizeof(uint8_t) * numOfRead);
+    cudaMemcpy(gatmp_t, d_reads.strand, numOfRead * sizeof(uint8_t),
+               cudaMemcpyDeviceToDevice);
     gather<uint8_t>
         <<<nReadBlock, blockSize>>>(d_indices, gatmp_t, d_reads.strand, numOfRead);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    cudaFree(gatmp_t);
+    read_core_t *gatmp_c;
+    cudaMalloc((void **)&gatmp_c, sizeof(read_core_t) * numOfRead);
+    cudaMemcpy(gatmp_c, d_reads.core, numOfRead * sizeof(read_core_t),
+               cudaMemcpyDeviceToDevice);
     gather<read_core_t>
         <<<nReadBlock, blockSize>>>(d_indices, gatmp_c, d_reads.core, numOfRead);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
-
-    cudaFree(gatmp_read_e);
-    cudaFree(gatmp_t);
     cudaFree(gatmp_c);
-    cudaFree(d_temp_storage);
+
     cudaFree(d_indices);
-    cudaFree(d_indices_in);
-    cudaFree(d_start_in);
     delete[] ind;
 
     cudaMemcpy(h_reads.start_.data(), d_reads.start_, numOfRead * sizeof(uint64_t),

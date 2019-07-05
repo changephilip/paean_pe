@@ -17,7 +17,7 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -I/home/qianjiaqiang/cub/cub -fstack-protector -D_FORCE_INLINES")
 
-set(GPU_ARCHITECTURE "sm_75" CACHE STRING "Target GPU architecture")
+set(GPU_ARCHITECTURE "sm_61" CACHE STRING "Target GPU architecture")
 
 set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda-9.2")
 set(CUDA_LIBRARY_DIR /usr/local/cuda-9.2/lib64/)
