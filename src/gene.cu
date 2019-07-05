@@ -81,7 +81,9 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
             if (junctionCount) {
                 int32_t flag=0;
                 for (int32_t jId=0;jId<junctionCount;jId++){
-                        if (reade -bin_start+1> N){flag+=1;break;}
+                        if (reade -bin_start+1> N)
+				{flag+=1;
+				break;}
 			if (d_reads.core[readId].junctions[jId].start_+reads-1-bin_start>N or d_reads.core[readId].junctions[jId].end_+reads-1-bin_start >N){
                                 flag+=1;
 				break;
@@ -94,10 +96,11 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
                         uint32_t s=reads-bin_start;
                         uint32_t e=d_reads.core[readId].junctions[jId].start_ +
                                        reads - 1-bin_start;
-			//if (e > N or s>N){
-			//	printf("binId\treadId\tjId\ts\te\tN\n");
-                         //       printf("%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
-			//}
+			if (e > N or s>N){
+				printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
+                                printf("TYPE1\t%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
+				e = N;
+			}
                         h_setNoneZeroRoll(bin_buf,s,e);
                     } 
 		    if (jId == junctionCount) {
@@ -105,10 +108,10 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
                                 reads - 1-bin_start;
 
                         uint32_t e=reade-bin_start;
-			//if (e > N or s>N){
-			//	printf("binId\treadId\tjId\ts\te\tN\n");
-                         //       printf("%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
-			//}
+			if (e > N or s>N){
+				printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
+                                printf("TYPE2\t%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
+			}
 			h_setNoneZeroRoll(bin_buf,s,e);
                     } 
 		    if (jId!=0 and jId!=junctionCount ){
@@ -116,10 +119,10 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
                                 reads - 1-bin_start;
 			uint32_t e=d_reads.core[readId].junctions[jId].start_ + reads -
                                 1-bin_start;
-			//if (e > N or s>N){
-			//	printf("binId\treadId\tjId\ts\te\tN\n");
-                         //       printf("%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
-			//}
+			if (e > N or s>N){
+				printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
+                                printf("TYPE3\t%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
+			}
                             h_setNoneZeroRoll(bin_buf,s,e);
                     	}
                    }
