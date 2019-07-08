@@ -28,13 +28,13 @@ int32_t nextPow2(int32_t x)
 }
 __inline__ void h_setNoneZero(uint32_t *bitmap, uint32_t N)
 {
-    //bitmap[N >> 5] |= (0x80000000 >> (N & 31));
+    // bitmap[N >> 5] |= (0x80000000 >> (N & 31));
     bitmap[N >> 5] |= (0x80000000 >> (N & 31));
 }
-__inline__ void h_setNoneZeroRoll(uint32_t *bitmap,
-                                                uint32_t start, uint32_t end)
+__inline__ void h_setNoneZeroRoll(uint32_t *bitmap, uint32_t start,
+                                  uint32_t end)
 {
-//#pragma unroll
+    //#pragma unroll
     for (uint32_t i = start; i < end; i++) {
         h_setNoneZero(bitmap, i);
     }
@@ -42,99 +42,137 @@ __inline__ void h_setNoneZeroRoll(uint32_t *bitmap,
 
 __inline__ uint32_t h_popbuf(uint32_t *bitmap, uint32_t N)
 {
-    uint32_t sum ;
+    uint32_t sum;
     sum = 0;
-//#pragma unroll
-    for (uint32_t i = 0; i < N ; i++) {
-        //sum += __popc(bitmap[i]);
+    //#pragma unroll
+    for (uint32_t i = 0; i < N; i++) {
+        // sum += __popc(bitmap[i]);
         sum += __builtin_popcount(bitmap[i]);
     }
     return sum;
 }
+struct {
+    bool operator()(Junction a, Junction b) const
+    {
+        return a.start_ < b.start_;
+    }
+} customLess;
 
+void junctionSort(read_core_t &t)
+{
+    Junction jct[t.junctionCount];
+    for (int32_t i = 0; i < t.junctionCount; i++) {
+        jct[i].start_ = t.junctions[i].start_;
+        jct[i].end_ = t.junctions[i].end_;
+    }
+    std::sort(jct, jct + t.junctionCount, customLess);
+    for (int32_t i = 0; i < t.junctionCount; i++) {
+        t.junctions[i].start_ = jct[i].start_;
+        t.junctions[i].end_ = jct[i].end_;
+    }
+}
 void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
-                                  int32_t *d_read2bin_end, int32_t numOfRead,
-                                  int32_t *d_nj_read2bin_start,
-                                  int32_t *d_nj_read2bin_end,
-                                  int32_t numOf_nj_read, h_Reads d_reads,
-                                  h_nj_Reads d_nj_reads, int32_t *d_bin_length,
-                                  int32_t numOfBin)
+                            int32_t *d_read2bin_end, int32_t numOfRead,
+                            int32_t *d_nj_read2bin_start,
+                            int32_t *d_nj_read2bin_end, int32_t numOf_nj_read,
+                            h_Reads d_reads, h_nj_Reads d_nj_reads,
+                            int32_t *d_bin_length, int32_t numOfBin)
 {
     uint32_t binId;
     uint64_t bin_start, bin_end;
-    uint32_t junctionCount, N, n,reads, reade;
+    uint32_t junctionCount, N, n, reads, reade;
     uint32_t *bin_buf;
     bin_buf = new uint32_t[150000];
-//#pragma omp parallel for num_threads(12)
-    for(binId=0;binId<numOfBin;binId++)
-    {
-	bin_start = d_bins.start_[binId] & (refLength - 1);
+    //#pragma omp parallel for num_threads(12)
+    for (binId = 0; binId < numOfBin; binId++) {
+        bin_start = d_bins.start_[binId] & (refLength - 1);
         bin_end = d_bins.end_[binId] & (refLength - 1);
         N = bin_end - bin_start + 1;
-        n = N/32+1;
-        memset(bin_buf,0,sizeof(uint32_t)*150000);
+        n = N / 32 + 1;
+        memset(bin_buf, 0, sizeof(uint32_t) * 150000);
         for (int32_t readId = d_read2bin_start[binId];
              readId < d_read2bin_end[binId]; readId++) {
             junctionCount = d_reads.core[readId].junctionCount;
             reads = uint32_t(d_reads.start_[readId] & (refLength - 1));
             reade = uint32_t(d_reads.end_[readId] & (refLength - 1));
             if (junctionCount) {
-                int32_t flag=0;
-                for (int32_t jId=0;jId<junctionCount;jId++){
-                        if (reade -bin_start+1> N)
-				{flag+=1;
-				break;}
-			if (d_reads.core[readId].junctions[jId].start_+reads-1-bin_start>N or d_reads.core[readId].junctions[jId].end_+reads-1-bin_start >N){
-                                flag+=1;
-				break;
-			}
-		}
-                if (flag==0)
-		{
-                for (int32_t jId = 0; jId <= junctionCount; jId++) {
-                    if (jId == 0) {
-                        uint32_t s=reads-bin_start;
-                        uint32_t e=d_reads.core[readId].junctions[jId].start_ +
-                                       reads - 1-bin_start;
-			if (e > N or s>N){
-				printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
-                                printf("TYPE1\t%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
-				e = N;
-			}
-                        h_setNoneZeroRoll(bin_buf,s,e);
-                    } 
-		    if (jId == junctionCount) {
-			uint32_t s=d_reads.core[readId].junctions[jId - 1].end_ +
-                                reads - 1-bin_start;
+                read_core_t t;
+                read_core_t t_filter;
+                t.junctionCount = d_reads.core[readId].junctionCount;
+                for (int32_t jId = 0; jId < t.junctionCount; jId++) {
+                    t.junctions[jId].start_ =
+                        d_reads.core[readId].junctions[jId].start_;
+                    t.junctions[jId].end_ =
+                        d_reads.core[readId].junctions[jId].end_;
+                }
 
-                        uint32_t e=reade-bin_start;
-			if (e > N or s>N){
-				printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
-                                printf("TYPE2\t%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
-			}
-			h_setNoneZeroRoll(bin_buf,s,e);
-                    } 
-		    if (jId!=0 and jId!=junctionCount ){
- 			uint32_t s=d_reads.core[readId].junctions[jId - 1].end_ +
-                                reads - 1-bin_start;
-			uint32_t e=d_reads.core[readId].junctions[jId].start_ + reads -
-                                1-bin_start;
-			if (e > N or s>N){
-				printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
-                                printf("TYPE3\t%d\t%d\t%d\t%d\t%d\t%d\n",binId,readId,jId,s,e,N);
-			}
-                            h_setNoneZeroRoll(bin_buf,s,e);
-                    	}
-                   }
-		}
+                junctionSort(t);
+                for (int32_t jId = 0; jId < t.junctionCount; jId++) {
+                    if (t.junctions[jId].start_ + reads - 1 - bin_start >
+                            int(N + 150) or
+                        t.junctions[jId].end_ + reads - 1 - bin_start >
+                            (N + 150)) {
+                        continue;
+                    } else {
+                        t_filter.junctionCount += 1;
+                        t_filter.junctions[t_filter.junctionCount - 1].start_ =
+                            t.junctions[jId].start_;
+                        t_filter.junctions[t_filter.junctionCount - 1].end_ =
+                            t.junctions[jId].end_;
+                    }
+                }
+                // default junction pattern on reads
+                if (t_filter.junctionCount) {
+                    for (int32_t jId = 0; jId <= t_filter.junctionCount;
+                         jId++) {
+                        if (jId == 0) {
+                            uint32_t s = reads - bin_start;
+                            uint32_t e = t_filter.junctions[jId].start_ +
+                                         reads - 1 - bin_start;
+                            if (e > N or s > N) {
+                                printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
+                                printf("TYPE1\t%d\t%d\t%d\t%d\t%d\t%d\n", binId,
+                                       readId, jId, s, e, N);
+                                e = N;
+                            }
+                            h_setNoneZeroRoll(bin_buf, s, e);
+                        }
+                        if (jId == t_filter.junctionCount) {
+                            uint32_t s = t_filter.junctions[jId - 1].end_ +
+                                         reads - 1 - bin_start;
+
+                            uint32_t e = reade - bin_start;
+                            if (e > N or s > N) {
+                                printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
+                                printf("TYPE2\t%d\t%d\t%d\t%d\t%d\t%d\n", binId,
+                                       readId, jId, s, e, N);
+                                e = N;
+                            }
+                            h_setNoneZeroRoll(bin_buf, s, e);
+                        }
+                        if (jId != 0 and jId != t_filter.junctionCount) {
+                            uint32_t s = t_filter.junctions[jId - 1].end_ +
+                                         reads - 1 - bin_start;
+                            uint32_t e = t_filter.junctions[jId].start_ +
+                                         reads - 1 - bin_start;
+                            if (e > N or s > N) {
+                                printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
+                                printf("TYPE3\t%d\t%d\t%d\t%d\t%d\t%d\n", binId,
+                                       readId, jId, s, e, N);
+                                e = N;
+                            }
+                            h_setNoneZeroRoll(bin_buf, s, e);
+                        }
+                    }
+                }
             }
         }
-//#pragma unroll
+        //#pragma unroll
         for (int32_t readId = d_nj_read2bin_start[binId];
              readId < d_nj_read2bin_end[binId]; readId++) {
             reads = uint32_t(d_nj_reads.start_[readId] & (refLength - 1));
             reade = uint32_t(d_nj_reads.end_[readId] & (refLength - 1));
-            h_setNoneZeroRoll(bin_buf, reads-bin_start, reade-bin_start);
+            h_setNoneZeroRoll(bin_buf, reads - bin_start, reade - bin_start);
         }
         d_bin_length[binId] = h_popbuf(bin_buf, n);
     }
@@ -178,13 +216,13 @@ d_Reads gpu_chipMallocRead(h_Reads &h_reads, int32_t numOfRead)
 d_nj_Reads gpu_chipMalloc_njRead(h_nj_Reads &h_nj_reads, int32_t numOf_nj_Read)
 {
     d_nj_Reads d_nj_reads;
-    CUDA_SAFE_CALL(
-        cudaMalloc((void **)&(d_nj_reads.start_), sizeof(uint64_t) * numOf_nj_Read));
-    CUDA_SAFE_CALL(
-        cudaMalloc((void **)&(d_nj_reads.end_), sizeof(uint64_t) * numOf_nj_Read));
-    CUDA_SAFE_CALL(
-        cudaMalloc((void **)&(d_nj_reads.strand), sizeof(uint8_t) * numOf_nj_Read));
-    
+    CUDA_SAFE_CALL(cudaMalloc((void **)&(d_nj_reads.start_),
+                              sizeof(uint64_t) * numOf_nj_Read));
+    CUDA_SAFE_CALL(cudaMalloc((void **)&(d_nj_reads.end_),
+                              sizeof(uint64_t) * numOf_nj_Read));
+    CUDA_SAFE_CALL(cudaMalloc((void **)&(d_nj_reads.strand),
+                              sizeof(uint8_t) * numOf_nj_Read));
+
     CUDA_SAFE_CALL(cudaMemcpy(d_nj_reads.start_, h_nj_reads.start_.data(),
                               sizeof(uint64_t) * numOf_nj_Read,
                               cudaMemcpyHostToDevice));
@@ -272,7 +310,7 @@ d_Bins gpu_chipMallocBin(h_Bins &h_bins, int32_t numOfBin)
     return d_bins;
 }
 
-void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
+void HandleBin(h_Bins &h_bins, h_Reads &h_reads, h_nj_Reads &h_nj_reads,
                h_ASEs &h_ases)
 {
     int32_t numOfBin = int32_t(h_bins.start_.size());
@@ -326,7 +364,8 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     }
     uint32_t *d_ind;
     cudaMalloc((void **)&d_ind, sizeof(uint32_t) * numOfRead);
-    cudaMemcpy(d_ind, ind, sizeof(uint32_t) * numOfRead, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_ind, ind, sizeof(uint32_t) * numOfRead,
+               cudaMemcpyHostToDevice);
     uint64_t *gatmp_read_e;
     uint8_t *gatmp_t;
     read_core_t *gatmp_c;
@@ -341,8 +380,8 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
                cudaMemcpyDeviceToDevice);
 
     unsigned nReadBlock = (unsigned(numOfRead) + blockSize - 1) / blockSize;
-    gather<uint64_t>
-        <<<nReadBlock, blockSize>>>(d_ind, gatmp_read_e, d_reads.end_, numOfRead);
+    gather<uint64_t><<<nReadBlock, blockSize>>>(d_ind, gatmp_read_e,
+                                                d_reads.end_, numOfRead);
     gather<uint8_t>
         <<<nReadBlock, blockSize>>>(d_ind, gatmp_t, d_reads.strand, numOfRead);
     gather<read_core_t>
@@ -365,7 +404,8 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
 
     thrust::device_vector<int> d_nj_indices((unsigned long)numOf_nj_Read);
     thrust::sequence(d_nj_indices.begin(), d_nj_indices.end(), 0, 1);
-    thrust::stable_sort_by_key(thrust::device, d_nj_starts, d_nj_starts + numOf_nj_Read,
+    thrust::stable_sort_by_key(thrust::device, d_nj_starts,
+                               d_nj_starts + numOf_nj_Read,
                                d_nj_indices.begin());
     /*
     thrust::gather(thrust::device, d_indices.begin(), d_indices.end(), d_ends,
@@ -386,27 +426,28 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     }
     uint32_t *d_nj_ind;
     cudaMalloc((void **)&d_nj_ind, sizeof(uint32_t) * numOf_nj_Read);
-    cudaMemcpy(d_nj_ind, nj_ind, sizeof(uint32_t) * numOf_nj_Read, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_nj_ind, nj_ind, sizeof(uint32_t) * numOf_nj_Read,
+               cudaMemcpyHostToDevice);
     uint64_t *gatmp_read_e_nj;
     uint8_t *gatmp_t_nj;
     cudaMalloc((void **)&gatmp_read_e_nj, sizeof(uint64_t) * numOf_nj_Read);
     cudaMalloc((void **)&gatmp_t_nj, sizeof(uint8_t) * numOf_nj_Read);
-    cudaMemcpy(gatmp_read_e_nj, d_nj_reads.end_, numOf_nj_Read * sizeof(uint64_t),
-               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(gatmp_read_e_nj, d_nj_reads.end_,
+               numOf_nj_Read * sizeof(uint64_t), cudaMemcpyDeviceToDevice);
     cudaMemcpy(gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read * sizeof(uint8_t),
                cudaMemcpyDeviceToDevice);
 
-    gather<uint64_t>
-        <<<nReadBlock, blockSize>>>(d_nj_ind, gatmp_read_e_nj, d_nj_reads.end_, numOf_nj_Read);
-    gather<uint8_t>
-        <<<nReadBlock, blockSize>>>(d_nj_ind, gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read);
+    gather<uint64_t><<<nReadBlock, blockSize>>>(d_nj_ind, gatmp_read_e_nj,
+                                                d_nj_reads.end_, numOf_nj_Read);
+    gather<uint8_t><<<nReadBlock, blockSize>>>(
+        d_nj_ind, gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
     cudaFree(gatmp_read_e_nj);
     cudaFree(gatmp_t_nj);
     cudaFree(d_nj_ind);
     delete[] nj_ind;
-    
+
     std::cout << "end sorting nj_reads..." << std::endl;
     /*
     uint64_t *ds_read_s;
@@ -450,17 +491,17 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&d_read2bin_start, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-            cudaMalloc((void **)&d_read2bin_end, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_read2bin_end, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-                    cudaMalloc((void **)&d_nj_read2bin_start, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_nj_read2bin_start, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-            cudaMalloc((void **)&d_nj_read2bin_end, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_nj_read2bin_end, sizeof(int32_t) * numOfBin));
 
     // assign reads to bins
     std::cout << "starting assign reads..." << std::endl;
     gpu_assign_nj_read_kernel<<<nBlock, blockSize>>>(
-        d_bins, numOfBin, d_nj_reads, numOfRead, d_assist_reads, d_nj_read2bin_start,
-        d_nj_read2bin_end);
+        d_bins, numOfBin, d_nj_reads, numOfRead, d_assist_reads,
+        d_nj_read2bin_start, d_nj_read2bin_end);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     gpu_assign_read_kernel<<<nBlock, blockSize>>>(
         d_bins, numOfBin, d_reads, numOfRead, d_assist_reads, d_read2bin_start,
@@ -655,8 +696,8 @@ void HandleBin(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     delete[] tpmStore;
 }
 
-void HandleBin_cub(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
-               h_ASEs &h_ases)
+void HandleBin_cub(h_Bins &h_bins, h_Reads &h_reads, h_nj_Reads &h_nj_reads,
+                   h_ASEs &h_ases)
 {
     int32_t numOfBin = int32_t(h_bins.start_.size());
     int32_t numOfRead = int32_t(h_reads.start_.size());
@@ -679,26 +720,31 @@ void HandleBin_cub(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     std::cout << "starting sorting reads..." << std::endl;
     uint32_t *ind;
     ind = new uint32_t[numOfRead];
-    //ind = std::iota(ind,ind+numOfRead,0);
+    // ind = std::iota(ind,ind+numOfRead,0);
     for (uint32_t i = 0; i < numOfRead; i++) {
         ind[i] = i;
     }
 
-    uint64_t* d_start_in;
-    uint32_t* d_indices_in;
+    uint64_t *d_start_in;
+    uint32_t *d_indices_in;
     uint32_t *d_indices;
-    cudaMalloc((void**)&d_start_in,sizeof(uint64_t)*numOfRead);
-    cudaMalloc((void**)&d_indices_in,sizeof(uint32_t)*numOfRead);
-    cudaMalloc((void**)&d_indices,sizeof(uint32_t)*numOfRead);
-    cudaMemcpy(d_start_in, d_reads.start_, sizeof(uint64_t) * numOfRead, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(d_indices_in, ind, sizeof(uint32_t) * numOfRead, cudaMemcpyHostToDevice);
-    void *d_temp_storage =NULL;
+    cudaMalloc((void **)&d_start_in, sizeof(uint64_t) * numOfRead);
+    cudaMalloc((void **)&d_indices_in, sizeof(uint32_t) * numOfRead);
+    cudaMalloc((void **)&d_indices, sizeof(uint32_t) * numOfRead);
+    cudaMemcpy(d_start_in, d_reads.start_, sizeof(uint64_t) * numOfRead,
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(d_indices_in, ind, sizeof(uint32_t) * numOfRead,
+               cudaMemcpyHostToDevice);
+    void *d_temp_storage = NULL;
     size_t temp_storage_bytes = 0;
-    cub::DeviceRadixSort::SortPairs(d_temp_storage,temp_storage_bytes,d_start_in,d_reads.start_,d_indices_in,d_indices,numOfRead);
-    cudaMalloc(&d_temp_storage,temp_storage_bytes);    
-    cub::DeviceRadixSort::SortPairs(d_temp_storage,temp_storage_bytes,d_start_in,d_reads.start_,d_indices_in,d_indices,numOfRead);
+    cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes,
+                                    d_start_in, d_reads.start_, d_indices_in,
+                                    d_indices, numOfRead);
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+    cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes,
+                                    d_start_in, d_reads.start_, d_indices_in,
+                                    d_indices, numOfRead);
 
-    
     uint64_t *gatmp_read_e;
     uint8_t *gatmp_t;
     read_core_t *gatmp_c;
@@ -713,12 +759,12 @@ void HandleBin_cub(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
                cudaMemcpyDeviceToDevice);
 
     unsigned nReadBlock = (unsigned(numOfRead) + blockSize - 1) / blockSize;
-    gather<uint64_t>
-        <<<nReadBlock, blockSize>>>(d_indices, gatmp_read_e, d_reads.end_, numOfRead);
-    gather<uint8_t>
-        <<<nReadBlock, blockSize>>>(d_indices, gatmp_t, d_reads.strand, numOfRead);
-    gather<read_core_t>
-        <<<nReadBlock, blockSize>>>(d_indices, gatmp_c, d_reads.core, numOfRead);
+    gather<uint64_t><<<nReadBlock, blockSize>>>(d_indices, gatmp_read_e,
+                                                d_reads.end_, numOfRead);
+    gather<uint8_t><<<nReadBlock, blockSize>>>(d_indices, gatmp_t,
+                                               d_reads.strand, numOfRead);
+    gather<read_core_t><<<nReadBlock, blockSize>>>(d_indices, gatmp_c,
+                                                   d_reads.core, numOfRead);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
     cudaFree(gatmp_read_e);
@@ -740,31 +786,37 @@ void HandleBin_cub(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     uint32_t *d_nj_indices;
     uint32_t *d_nj_indices_in;
     uint64_t *d_nj_start_in;
-    
+
     cudaMalloc((void **)&d_nj_indices, sizeof(uint32_t) * numOf_nj_Read);
     cudaMalloc((void **)&d_nj_indices_in, sizeof(uint32_t) * numOf_nj_Read);
     cudaMalloc((void **)&d_nj_start_in, sizeof(uint64_t) * numOf_nj_Read);
-    cudaMemcpy(d_nj_start_in, d_nj_reads.start_, sizeof(uint64_t) * numOf_nj_Read, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(d_nj_indices_in, nj_indices, sizeof(uint32_t) * numOf_nj_Read, cudaMemcpyHostToDevice);
-    d_temp_storage =NULL;
+    cudaMemcpy(d_nj_start_in, d_nj_reads.start_,
+               sizeof(uint64_t) * numOf_nj_Read, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(d_nj_indices_in, nj_indices, sizeof(uint32_t) * numOf_nj_Read,
+               cudaMemcpyHostToDevice);
+    d_temp_storage = NULL;
     temp_storage_bytes = 0;
-    cub::DeviceRadixSort::SortPairs(d_temp_storage,temp_storage_bytes,d_nj_start_in,d_nj_reads.start_,d_nj_indices_in,d_nj_indices,numOf_nj_Read);
-    cudaMalloc(&d_temp_storage,temp_storage_bytes);    
-    cub::DeviceRadixSort::SortPairs(d_temp_storage,temp_storage_bytes,d_nj_start_in,d_nj_reads.start_,d_nj_indices_in,d_nj_indices,numOf_nj_Read);
+    cub::DeviceRadixSort::SortPairs(
+        d_temp_storage, temp_storage_bytes, d_nj_start_in, d_nj_reads.start_,
+        d_nj_indices_in, d_nj_indices, numOf_nj_Read);
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+    cub::DeviceRadixSort::SortPairs(
+        d_temp_storage, temp_storage_bytes, d_nj_start_in, d_nj_reads.start_,
+        d_nj_indices_in, d_nj_indices, numOf_nj_Read);
 
     uint64_t *gatmp_read_e_nj;
     uint8_t *gatmp_t_nj;
     cudaMalloc((void **)&gatmp_read_e_nj, sizeof(uint64_t) * numOf_nj_Read);
     cudaMalloc((void **)&gatmp_t_nj, sizeof(uint8_t) * numOf_nj_Read);
-    cudaMemcpy(gatmp_read_e_nj, d_nj_reads.end_, numOf_nj_Read * sizeof(uint64_t),
-               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(gatmp_read_e_nj, d_nj_reads.end_,
+               numOf_nj_Read * sizeof(uint64_t), cudaMemcpyDeviceToDevice);
     cudaMemcpy(gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read * sizeof(uint8_t),
                cudaMemcpyDeviceToDevice);
 
-    gather<uint64_t>
-        <<<nReadBlock, blockSize>>>(d_nj_indices, gatmp_read_e_nj, d_nj_reads.end_, numOf_nj_Read);
-    gather<uint8_t>
-        <<<nReadBlock, blockSize>>>(d_nj_indices, gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read);
+    gather<uint64_t><<<nReadBlock, blockSize>>>(d_nj_indices, gatmp_read_e_nj,
+                                                d_nj_reads.end_, numOf_nj_Read);
+    gather<uint8_t><<<nReadBlock, blockSize>>>(
+        d_nj_indices, gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
     cudaFree(gatmp_read_e_nj);
@@ -774,7 +826,7 @@ void HandleBin_cub(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     cudaFree(d_nj_start_in);
     cudaFree(d_temp_storage);
     delete[] nj_indices;
-    
+
     std::cout << "end sorting nj_reads..." << std::endl;
     /*
     uint64_t *ds_read_s;
@@ -818,17 +870,17 @@ void HandleBin_cub(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&d_read2bin_start, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-            cudaMalloc((void **)&d_read2bin_end, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_read2bin_end, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-                    cudaMalloc((void **)&d_nj_read2bin_start, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_nj_read2bin_start, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-            cudaMalloc((void **)&d_nj_read2bin_end, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_nj_read2bin_end, sizeof(int32_t) * numOfBin));
 
     // assign reads to bins
     std::cout << "starting assign reads..." << std::endl;
     gpu_assign_nj_read_kernel<<<nBlock, blockSize>>>(
-        d_bins, numOfBin, d_nj_reads, numOfRead, d_assist_reads, d_nj_read2bin_start,
-        d_nj_read2bin_end);
+        d_bins, numOfBin, d_nj_reads, numOfRead, d_assist_reads,
+        d_nj_read2bin_start, d_nj_read2bin_end);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     gpu_assign_read_kernel<<<nBlock, blockSize>>>(
         d_bins, numOfBin, d_reads, numOfRead, d_assist_reads, d_read2bin_start,
@@ -1022,8 +1074,8 @@ void HandleBin_cub(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     delete[] tpmStore;
 }
 
-void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
-               h_ASEs &h_ases)
+void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads, h_nj_Reads &h_nj_reads,
+                       h_ASEs &h_ases)
 {
     int32_t numOfBin = int32_t(h_bins.start_.size());
     int32_t numOfRead = int32_t(h_reads.start_.size());
@@ -1046,24 +1098,30 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     std::cout << "starting sorting reads..." << std::endl;
     uint32_t *ind;
     ind = new uint32_t[numOfRead];
-    //ind = std::iota(ind,ind+numOfRead,0);
+    // ind = std::iota(ind,ind+numOfRead,0);
     for (uint32_t i = 0; i < numOfRead; i++) {
         ind[i] = i;
     }
 
-    uint64_t* d_start_in;
-    uint32_t* d_indices_in;
+    uint64_t *d_start_in;
+    uint32_t *d_indices_in;
     uint32_t *d_indices;
-    cudaMalloc((void**)&d_start_in,sizeof(uint64_t)*numOfRead);
-    cudaMalloc((void**)&d_indices_in,sizeof(uint32_t)*numOfRead);
-    cudaMalloc((void**)&d_indices,sizeof(uint32_t)*numOfRead);
-    cudaMemcpy(d_start_in, d_reads.start_, sizeof(uint64_t) * numOfRead, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(d_indices_in, ind, sizeof(uint32_t) * numOfRead, cudaMemcpyHostToDevice);
-    void *d_temp_storage =NULL;
+    cudaMalloc((void **)&d_start_in, sizeof(uint64_t) * numOfRead);
+    cudaMalloc((void **)&d_indices_in, sizeof(uint32_t) * numOfRead);
+    cudaMalloc((void **)&d_indices, sizeof(uint32_t) * numOfRead);
+    cudaMemcpy(d_start_in, d_reads.start_, sizeof(uint64_t) * numOfRead,
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(d_indices_in, ind, sizeof(uint32_t) * numOfRead,
+               cudaMemcpyHostToDevice);
+    void *d_temp_storage = NULL;
     size_t temp_storage_bytes = 0;
-    cub::DeviceRadixSort::SortPairs(d_temp_storage,temp_storage_bytes,d_start_in,d_reads.start_,d_indices_in,d_indices,numOfRead);
-    cudaMalloc(&d_temp_storage,temp_storage_bytes);    
-    cub::DeviceRadixSort::SortPairs(d_temp_storage,temp_storage_bytes,d_start_in,d_reads.start_,d_indices_in,d_indices,numOfRead);
+    cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes,
+                                    d_start_in, d_reads.start_, d_indices_in,
+                                    d_indices, numOfRead);
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+    cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes,
+                                    d_start_in, d_reads.start_, d_indices_in,
+                                    d_indices, numOfRead);
 
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     cudaFree(d_temp_storage);
@@ -1076,39 +1134,39 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     cudaMalloc((void **)&gatmp_read_e, sizeof(uint64_t) * numOfRead);
     cudaMemcpy(gatmp_read_e, d_reads.end_, numOfRead * sizeof(uint64_t),
                cudaMemcpyDeviceToDevice);
-    gather<uint64_t>
-        <<<nReadBlock, blockSize>>>(d_indices, gatmp_read_e, d_reads.end_, numOfRead);
+    gather<uint64_t><<<nReadBlock, blockSize>>>(d_indices, gatmp_read_e,
+                                                d_reads.end_, numOfRead);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     cudaFree(gatmp_read_e);
-    
+
     uint8_t *gatmp_t;
     cudaMalloc((void **)&gatmp_t, sizeof(uint8_t) * numOfRead);
     cudaMemcpy(gatmp_t, d_reads.strand, numOfRead * sizeof(uint8_t),
                cudaMemcpyDeviceToDevice);
-    gather<uint8_t>
-        <<<nReadBlock, blockSize>>>(d_indices, gatmp_t, d_reads.strand, numOfRead);
+    gather<uint8_t><<<nReadBlock, blockSize>>>(d_indices, gatmp_t,
+                                               d_reads.strand, numOfRead);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     cudaFree(gatmp_t);
     read_core_t *gatmp_c;
     cudaMalloc((void **)&gatmp_c, sizeof(read_core_t) * numOfRead);
     cudaMemcpy(gatmp_c, d_reads.core, numOfRead * sizeof(read_core_t),
                cudaMemcpyDeviceToDevice);
-    gather<read_core_t>
-        <<<nReadBlock, blockSize>>>(d_indices, gatmp_c, d_reads.core, numOfRead);
+    gather<read_core_t><<<nReadBlock, blockSize>>>(d_indices, gatmp_c,
+                                                   d_reads.core, numOfRead);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     cudaFree(gatmp_c);
 
     cudaFree(d_indices);
     delete[] ind;
 
-    cudaMemcpy(h_reads.start_.data(), d_reads.start_, numOfRead * sizeof(uint64_t),
-               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_reads.start_.data(), d_reads.start_,
+               numOfRead * sizeof(uint64_t), cudaMemcpyDeviceToHost);
     cudaMemcpy(h_reads.end_.data(), d_reads.end_, numOfRead * sizeof(uint64_t),
                cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_reads.strand.data(), d_reads.strand, numOfRead * sizeof(uint8_t),
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_reads.core.data(), d_reads.core, numOfRead * sizeof(read_core_t),
-               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_reads.strand.data(), d_reads.strand,
+               numOfRead * sizeof(uint8_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_reads.core.data(), d_reads.core,
+               numOfRead * sizeof(read_core_t), cudaMemcpyDeviceToHost);
 
     std::cout << "starting sorting nj_reads..." << std::endl;
 
@@ -1120,31 +1178,37 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     uint32_t *d_nj_indices;
     uint32_t *d_nj_indices_in;
     uint64_t *d_nj_start_in;
-    
+
     cudaMalloc((void **)&d_nj_indices, sizeof(uint32_t) * numOf_nj_Read);
     cudaMalloc((void **)&d_nj_indices_in, sizeof(uint32_t) * numOf_nj_Read);
     cudaMalloc((void **)&d_nj_start_in, sizeof(uint64_t) * numOf_nj_Read);
-    cudaMemcpy(d_nj_start_in, d_nj_reads.start_, sizeof(uint64_t) * numOf_nj_Read, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(d_nj_indices_in, nj_indices, sizeof(uint32_t) * numOf_nj_Read, cudaMemcpyHostToDevice);
-    d_temp_storage =NULL;
+    cudaMemcpy(d_nj_start_in, d_nj_reads.start_,
+               sizeof(uint64_t) * numOf_nj_Read, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(d_nj_indices_in, nj_indices, sizeof(uint32_t) * numOf_nj_Read,
+               cudaMemcpyHostToDevice);
+    d_temp_storage = NULL;
     temp_storage_bytes = 0;
-    cub::DeviceRadixSort::SortPairs(d_temp_storage,temp_storage_bytes,d_nj_start_in,d_nj_reads.start_,d_nj_indices_in,d_nj_indices,numOf_nj_Read);
-    cudaMalloc(&d_temp_storage,temp_storage_bytes);    
-    cub::DeviceRadixSort::SortPairs(d_temp_storage,temp_storage_bytes,d_nj_start_in,d_nj_reads.start_,d_nj_indices_in,d_nj_indices,numOf_nj_Read);
+    cub::DeviceRadixSort::SortPairs(
+        d_temp_storage, temp_storage_bytes, d_nj_start_in, d_nj_reads.start_,
+        d_nj_indices_in, d_nj_indices, numOf_nj_Read);
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+    cub::DeviceRadixSort::SortPairs(
+        d_temp_storage, temp_storage_bytes, d_nj_start_in, d_nj_reads.start_,
+        d_nj_indices_in, d_nj_indices, numOf_nj_Read);
 
     uint64_t *gatmp_read_e_nj;
     uint8_t *gatmp_t_nj;
     cudaMalloc((void **)&gatmp_read_e_nj, sizeof(uint64_t) * numOf_nj_Read);
     cudaMalloc((void **)&gatmp_t_nj, sizeof(uint8_t) * numOf_nj_Read);
-    cudaMemcpy(gatmp_read_e_nj, d_nj_reads.end_, numOf_nj_Read * sizeof(uint64_t),
-               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(gatmp_read_e_nj, d_nj_reads.end_,
+               numOf_nj_Read * sizeof(uint64_t), cudaMemcpyDeviceToDevice);
     cudaMemcpy(gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read * sizeof(uint8_t),
                cudaMemcpyDeviceToDevice);
 
-    gather<uint64_t>
-        <<<nReadBlock, blockSize>>>(d_nj_indices, gatmp_read_e_nj, d_nj_reads.end_, numOf_nj_Read);
-    gather<uint8_t>
-        <<<nReadBlock, blockSize>>>(d_nj_indices, gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read);
+    gather<uint64_t><<<nReadBlock, blockSize>>>(d_nj_indices, gatmp_read_e_nj,
+                                                d_nj_reads.end_, numOf_nj_Read);
+    gather<uint8_t><<<nReadBlock, blockSize>>>(
+        d_nj_indices, gatmp_t_nj, d_nj_reads.strand, numOf_nj_Read);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
     cudaFree(gatmp_read_e_nj);
@@ -1154,13 +1218,13 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     cudaFree(d_nj_start_in);
     cudaFree(d_temp_storage);
     delete[] nj_indices;
-    cudaMemcpy(h_nj_reads.start_.data(), d_nj_reads.start_, numOf_nj_Read * sizeof(uint64_t),
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_nj_reads.end_.data(), d_nj_reads.end_, numOf_nj_Read * sizeof(uint64_t),
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_nj_reads.strand.data(), d_nj_reads.strand, numOf_nj_Read * sizeof(uint8_t),
-               cudaMemcpyDeviceToHost);
-   
+    cudaMemcpy(h_nj_reads.start_.data(), d_nj_reads.start_,
+               numOf_nj_Read * sizeof(uint64_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_nj_reads.end_.data(), d_nj_reads.end_,
+               numOf_nj_Read * sizeof(uint64_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_nj_reads.strand.data(), d_nj_reads.strand,
+               numOf_nj_Read * sizeof(uint8_t), cudaMemcpyDeviceToHost);
+
     std::cout << "end sorting nj_reads..." << std::endl;
     /*
     uint64_t *ds_read_s;
@@ -1204,17 +1268,17 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     CUDA_SAFE_CALL(
         cudaMalloc((void **)&d_read2bin_start, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-            cudaMalloc((void **)&d_read2bin_end, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_read2bin_end, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-                    cudaMalloc((void **)&d_nj_read2bin_start, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_nj_read2bin_start, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(
-            cudaMalloc((void **)&d_nj_read2bin_end, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_nj_read2bin_end, sizeof(int32_t) * numOfBin));
 
     // assign reads to bins
     std::cout << "starting assign reads..." << std::endl;
     gpu_assign_nj_read_kernel<<<nBlock, blockSize>>>(
-        d_bins, numOfBin, d_nj_reads, numOfRead, d_assist_reads, d_nj_read2bin_start,
-        d_nj_read2bin_end);
+        d_bins, numOfBin, d_nj_reads, numOfRead, d_assist_reads,
+        d_nj_read2bin_start, d_nj_read2bin_end);
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     gpu_assign_read_kernel<<<nBlock, blockSize>>>(
         d_bins, numOfBin, d_reads, numOfRead, d_assist_reads, d_read2bin_start,
@@ -1236,28 +1300,41 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     float *d_tpmStore;
     CUDA_SAFE_CALL(cudaMalloc((void **)&d_tpmStore, numOfBin * sizeof(float)));
     int32_t *d_bin_length;
-    CUDA_SAFE_CALL(cudaMalloc((void **)&d_bin_length,numOfBin *sizeof(int32_t)));
+    CUDA_SAFE_CALL(
+        cudaMalloc((void **)&d_bin_length, numOfBin * sizeof(int32_t)));
     std::cout << "starting count tpm..." << std::endl;
-    //cudaThreadSetLimit(cudaLimitMallocHeapSize, 1024*1024*1024);
-    //modify_bin_length<<<nBlock*64,blockSize/64>>>(d_bins,d_read2bin_start,d_read2bin_end,numOfRead,d_nj_read2bin_start,d_nj_read2bin_end,numOf_nj_Read,d_reads,d_nj_reads,d_bin_length,numOfBin);
-    //modify_bin_length<<<1,2>>>(d_bins,d_read2bin_start,d_read2bin_end,numOfRead,d_nj_read2bin_start,d_nj_read2bin_end,numOf_nj_Read,d_reads,d_nj_reads,d_bin_length,numOfBin);
+    // cudaThreadSetLimit(cudaLimitMallocHeapSize, 1024*1024*1024);
+    // modify_bin_length<<<nBlock*64,blockSize/64>>>(d_bins,d_read2bin_start,d_read2bin_end,numOfRead,d_nj_read2bin_start,d_nj_read2bin_end,numOf_nj_Read,d_reads,d_nj_reads,d_bin_length,numOfBin);
+    // modify_bin_length<<<1,2>>>(d_bins,d_read2bin_start,d_read2bin_end,numOfRead,d_nj_read2bin_start,d_nj_read2bin_end,numOf_nj_Read,d_reads,d_nj_reads,d_bin_length,numOfBin);
     int32_t *bin_length;
     bin_length = new int32_t[numOfBin];
 
-    int32_t *read2bin_start,*read2bin_end,*nj_read2bin_start,*nj_read2bin_end;
+    int32_t *read2bin_start, *read2bin_end, *nj_read2bin_start,
+        *nj_read2bin_end;
     read2bin_start = new int32_t[numOfBin];
     read2bin_end = new int32_t[numOfBin];
     nj_read2bin_start = new int32_t[numOfBin];
     nj_read2bin_end = new int32_t[numOfBin];
-    
-    CUDA_SAFE_CALL(cudaMemcpy(read2bin_start,d_read2bin_start,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost));
-    CUDA_SAFE_CALL(cudaMemcpy(read2bin_end,d_read2bin_end,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost));
-    CUDA_SAFE_CALL(cudaMemcpy(nj_read2bin_start,d_nj_read2bin_start,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost));
-    CUDA_SAFE_CALL(cudaMemcpy(nj_read2bin_end,d_nj_read2bin_end,sizeof(int32_t)*numOfBin,cudaMemcpyDeviceToHost));
 
+    CUDA_SAFE_CALL(cudaMemcpy(read2bin_start, d_read2bin_start,
+                              sizeof(int32_t) * numOfBin,
+                              cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(read2bin_end, d_read2bin_end,
+                              sizeof(int32_t) * numOfBin,
+                              cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(nj_read2bin_start, d_nj_read2bin_start,
+                              sizeof(int32_t) * numOfBin,
+                              cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(nj_read2bin_end, d_nj_read2bin_end,
+                              sizeof(int32_t) * numOfBin,
+                              cudaMemcpyDeviceToHost));
 
-    modify_bin_length_host(h_bins,read2bin_start,read2bin_end,numOfRead,nj_read2bin_start,nj_read2bin_end,numOf_nj_Read,h_reads,h_nj_reads,bin_length,numOfBin);
-    CUDA_SAFE_CALL(cudaMemcpy(d_bin_length,bin_length,sizeof(int32_t)*numOfBin,cudaMemcpyHostToDevice));
+    modify_bin_length_host(h_bins, read2bin_start, read2bin_end, numOfRead,
+                           nj_read2bin_start, nj_read2bin_end, numOf_nj_Read,
+                           h_reads, h_nj_reads, bin_length, numOfBin);
+    CUDA_SAFE_CALL(cudaMemcpy(d_bin_length, bin_length,
+                              sizeof(int32_t) * numOfBin,
+                              cudaMemcpyHostToDevice));
     delete[] bin_length;
     delete[] read2bin_start;
     delete[] read2bin_end;
@@ -1265,16 +1342,18 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads,h_nj_Reads  &h_nj_reads,
     delete[] nj_read2bin_end;
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
-    gpu_count_tempTPM_new<<<nBlock, blockSize>>>(d_bins, numOfBin, d_tempTPM,d_bin_length);
-    //sum d_tempTPM
+    gpu_count_tempTPM_new<<<nBlock, blockSize>>>(d_bins, numOfBin, d_tempTPM,
+                                                 d_bin_length);
+    // sum d_tempTPM
     float *tempTPM;
-    float tpmsum=0.0f;
+    float tpmsum = 0.0f;
     tempTPM = new float[numOfBin];
-    cudaMemcpy(tempTPM,d_tempTPM,sizeof(float)*numOfBin,cudaMemcpyDeviceToHost);
-    for (uint32_t i=0;i<numOfBin;i++){
-	tpmsum+=tempTPM[i];
-	}
-    delete[] tempTPM; 
+    cudaMemcpy(tempTPM, d_tempTPM, sizeof(float) * numOfBin,
+               cudaMemcpyDeviceToHost);
+    for (uint32_t i = 0; i < numOfBin; i++) {
+        tpmsum += tempTPM[i];
+    }
+    delete[] tempTPM;
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     reduceSinglePass(static_cast<int>(numOfBin), blockSize,
                      static_cast<int>(tpmSize), d_tempTPM, d_tpmCounter);
@@ -1489,13 +1568,13 @@ int main(int argc, char **argv)
               << (float)(t_time.tv_sec - start_time.tv_sec) << "s" << std::endl;
 
     std::cout << "start kernel program..." << std::endl;
-    std::string option_cub="cub";
-    std::string option_thrust="thrust";
-    if (option_cub.compare(argv[4])==0){
-    	HandleBin_cub_tpm(h_bins, h_reads, h_nj_reads, h_ases);
+    std::string option_cub = "cub";
+    std::string option_thrust = "thrust";
+    if (option_cub.compare(argv[4]) == 0) {
+        HandleBin_cub_tpm(h_bins, h_reads, h_nj_reads, h_ases);
     }
-    if (option_thrust.compare(argv[4])==0){
-    	HandleBin(h_bins, h_reads, h_nj_reads, h_ases);
+    if (option_thrust.compare(argv[4]) == 0) {
+        HandleBin(h_bins, h_reads, h_nj_reads, h_ases);
     }
     gettimeofday(&t2_time, 0);
     std::cout << "computing spent time: "
