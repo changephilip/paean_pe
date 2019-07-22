@@ -560,11 +560,7 @@ __global__ void gpu_count_PSI(d_ASEs d_ases, int32_t numOfASE,
         countIn = act.anchor[0] + act.anchor[1] + act.anchor[3];
 
         countOut = act.anchor[2];
-        if (act.anchor[3]) {
-            psi = (countIn / 3) / (countIn / 3 + countOut);
-        } else {
-            psi = (countIn / 2) / (countIn / 2 + countOut);
-        }
+        psi = (countIn / 2) / (countIn / 2 + countOut);
 #elif defined(RI_ANCHOR)
             countIn = float(act.anchor[0]);
             countOut = act.anchor[1];
