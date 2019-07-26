@@ -1,9 +1,9 @@
 #ifndef CHIP_BIN_KERNEL_H
 #define CHIP_BIN_KERNEL_H
 
+#include <cstring>
 #include "bin.cuh"
 #include "cuda_string.cuh"
-#include <cstring>
 #include "incgammabeta.h"
 #include "reduction_kernel.cuh"
 
@@ -115,6 +115,7 @@ __global__ void gpu_assign_read_kernel(d_Bins d_bins, int32_t numOfBin,
     }
 }
 
+
 __global__ void gpu_count_tempTPM(d_Bins d_bins, int32_t numOfBin,
                                   float *d_tempTPM)
 {
@@ -130,17 +131,26 @@ __global__ void gpu_count_tempTPM(d_Bins d_bins, int32_t numOfBin,
     }
 }
 
+__global__void gpu_count_tempTPM_modify(d_Bins d_bins, int32_t numOfBin,
+                                        int32_t *d_TPM_modify)
+{
+    int32_t binId = blockDim.x * blockIdx.x + threadIdx.x;
+    if (binId < numOfBin) {
+        d_bins.core[binId].readCount -= d_TPM_modify[binId];
+    }
+}
+
 __global__ void gpu_count_tempTPM_new(d_Bins d_bins, int32_t numOfBin,
                                       float *d_tempTPM, int32_t *d_bin_length)
 {
     int32_t binId = blockDim.x * blockIdx.x + threadIdx.x;
     if (binId < numOfBin) {
-       if (d_bin_length[binId]!=0){
-        d_tempTPM[binId] =
-            float(d_bins.core[binId].readCount) / float(d_bin_length[binId]);}
-	else{
-	d_tempTPM[binId]=0;
-	}
+        if (d_bin_length[binId] != 0) {
+            d_tempTPM[binId] = float(d_bins.core[binId].readCount) /
+                               float(d_bin_length[binId]);
+        } else {
+            d_tempTPM[binId] = 0;
+        }
 //#define DEBUG
 #ifdef DEBUG
         printf("d_tempTPM: %f\n", d_tempTPM[binId]);
@@ -238,7 +248,7 @@ __global__ void gpu_assign_read_ASE_kernel(d_ASEs d_ases, int32_t numOfASE,
                 // JTAT
                 junctionCount = d_reads.core[readId].junctionCount;
                 if (junctionCount) {
-//#pragma unroll
+                    //#pragma unroll
                     for (int jId = 0; jId < junctionCount; jId++) {
                         junction_s =
                             d_reads.core[readId].junctions[jId].start_ +
@@ -278,7 +288,7 @@ __global__ void gpu_assign_read_ASE_kernel(d_ASEs d_ases, int32_t numOfASE,
                 // JTAT
                 junctionCount = d_reads.core[readId].junctionCount;
                 if (junctionCount) {
-//#pragma unroll
+                    //#pragma unroll
                     for (int jId = 0; jId < junctionCount; jId++) {
                         junction_s =
                             d_reads.core[readId].junctions[jId].start_ +
@@ -423,7 +433,7 @@ __global__ void gpu_assign_read_ASE_kernel2(d_ASEs d_ases, int32_t numOfASE,
                 // JTAT
                 junctionCount = d_reads.core[readId].junctionCount;
                 if (junctionCount) {
-//#pragma unroll
+                    //#pragma unroll
                     for (int jId = 0; jId < junctionCount; jId++) {
                         junction_s =
                             d_reads.core[readId].junctions[jId].start_ +
@@ -638,15 +648,15 @@ __global__ void gather(uint32_t *indices, T *source, T *out,
         out[threadId] = source[targetId];
     }
 }
-__device__  __forceinline__ void setNoneZero(uint32_t *bitmap, uint32_t N)
+__device__ __forceinline__ void setNoneZero(uint32_t *bitmap, uint32_t N)
 {
-    //bitmap[N >> 5] |= (0x80000000 >> (N & 31));
+    // bitmap[N >> 5] |= (0x80000000 >> (N & 31));
     bitmap[N >> 5] |= (0x80000000 >> (N & 31));
 }
 __device__ __forceinline__ void setNoneZeroRoll(uint32_t *bitmap,
                                                 uint32_t start, uint32_t end)
 {
-//#pragma unroll
+    //#pragma unroll
     for (uint32_t i = start; i < end; i++) {
         setNoneZero(bitmap, i);
     }
@@ -654,10 +664,10 @@ __device__ __forceinline__ void setNoneZeroRoll(uint32_t *bitmap,
 
 __device__ __forceinline__ uint32_t popbuf(uint32_t *bitmap, uint32_t N)
 {
-    uint32_t sum ;
+    uint32_t sum;
     sum = 0;
-//#pragma unroll
-    for (uint32_t i = 0; i < N ; i++) {
+    //#pragma unroll
+    for (uint32_t i = 0; i < N; i++) {
         sum += __popc(bitmap[i]);
     }
     return sum;
@@ -673,58 +683,61 @@ __global__ void modify_bin_length(d_Bins d_bins, int32_t *d_read2bin_start,
 {
     uint32_t binId = blockDim.x * blockIdx.x + threadIdx.x;
     uint64_t bin_start, bin_end;
-    uint32_t junctionCount, N, n,reads, reade;
+    uint32_t junctionCount, N, n, reads, reade;
     uint32_t *bin_buf;
     if (binId < numOfBin) {
         bin_start = d_bins.start_[binId] & (refLength - 1);
         bin_end = d_bins.end_[binId] & (refLength - 1);
         N = bin_end - bin_start + 1;
-        n = N/32+1;
+        n = N / 32 + 1;
         bin_buf = (uint32_t *)malloc(n * sizeof(uint32_t));
-        c_memset(bin_buf,0,sizeof(uint32_t)*n);
+        c_memset(bin_buf, 0, sizeof(uint32_t) * n);
         for (int32_t readId = d_read2bin_start[binId];
              readId < d_read2bin_end[binId]; readId++) {
             junctionCount = d_reads.core[readId].junctionCount;
             reads = uint32_t(d_reads.start_[readId] & (refLength - 1));
             reade = uint32_t(d_reads.end_[readId] & (refLength - 1));
             if (junctionCount) {
-                int32_t flag=0;
-                for (int32_t jId=0;jId<junctionCount;jId++){
-			if (d_reads.core[readId].junctions[jId].start_+reads-1-bin_start>N or d_reads.core[readId].junctions[jId].end_+reads-1-bin_start>N){
-		flag=1;
-                break;
-		}
-		}
-                if (flag==0){
-                for (int32_t jId = 0; jId<= junctionCount; jId++) {
-                    if (jId == 0) {
-                        setNoneZeroRoll(
-                            bin_buf,
-                            reads-bin_start, 
-                            d_reads.core[readId].junctions[jId].start_ +
-                                       reads - 1-bin_start);
-                    } 
-		    if (jId == junctionCount) {
-                        setNoneZeroRoll(
-                            bin_buf,
-                            d_reads.core[readId].junctions[jId - 1].end_ +
-                                reads - 1-bin_start,
-                            reade-bin_start);
-                    } 
-		    if (jId!=0 and jId!=junctionCount)
-			 {
+                int32_t flag = 0;
+                for (int32_t jId = 0; jId < junctionCount; jId++) {
+                    if (d_reads.core[readId].junctions[jId].start_ + reads - 1 -
+                                bin_start >
+                            N or
+                        d_reads.core[readId].junctions[jId].end_ + reads - 1 -
+                                bin_start >
+                            N) {
+                        flag = 1;
+                        break;
+                    }
+                }
+                if (flag == 0) {
+                    for (int32_t jId = 0; jId <= junctionCount; jId++) {
+                        if (jId == 0) {
                             setNoneZeroRoll(
-                            bin_buf,
-                            d_reads.core[readId].junctions[jId - 1].end_ +
-                                reads - 1-bin_start,
-                            d_reads.core[readId].junctions[jId].start_ + reads -
-                                1-bin_start);
-                    	}
-                   }
-		}
+                                bin_buf, reads - bin_start,
+                                d_reads.core[readId].junctions[jId].start_ +
+                                    reads - 1 - bin_start);
+                        }
+                        if (jId == junctionCount) {
+                            setNoneZeroRoll(
+                                bin_buf,
+                                d_reads.core[readId].junctions[jId - 1].end_ +
+                                    reads - 1 - bin_start,
+                                reade - bin_start);
+                        }
+                        if (jId != 0 and jId != junctionCount) {
+                            setNoneZeroRoll(
+                                bin_buf,
+                                d_reads.core[readId].junctions[jId - 1].end_ +
+                                    reads - 1 - bin_start,
+                                d_reads.core[readId].junctions[jId].start_ +
+                                    reads - 1 - bin_start);
+                        }
+                    }
+                }
             }
         }
-//#pragma unroll
+        //#pragma unroll
         for (int32_t readId = d_nj_read2bin_start[binId];
              readId < d_nj_read2bin_end[binId]; readId++) {
             reads = uint32_t(d_nj_reads.start_[readId] & (refLength - 1));
@@ -736,7 +749,5 @@ __global__ void modify_bin_length(d_Bins d_bins, int32_t *d_read2bin_start,
     }
 }
 
-
-
-#endif  
+#endif
 // CHIP_BIN_KERNEL_H

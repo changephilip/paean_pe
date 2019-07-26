@@ -76,7 +76,8 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
                             int32_t *d_nj_read2bin_start,
                             int32_t *d_nj_read2bin_end, int32_t numOf_nj_read,
                             h_Reads d_reads, h_nj_Reads d_nj_reads,
-                            int32_t *d_bin_length, int32_t numOfBin)
+                            int32_t *d_bin_length, int32_t numOfBin,
+                            int32_t *TPM_modify)
 {
     uint32_t binId;
     uint64_t bin_start, bin_end;
@@ -112,6 +113,7 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
                             int(N + 150) or
                         t.junctions[jId].end_ + reads - 1 - bin_start >
                             (N + 150)) {
+                        TPM_modify += 1;
                         continue;
                     } else {
                         t_filter.junctionCount += 1;
@@ -129,10 +131,11 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
                             uint32_t s = reads - bin_start;
                             uint32_t e = t_filter.junctions[jId].start_ +
                                          reads - 1 - bin_start;
-                            if (e > N or s > N) {
-                                printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
-                                printf("TYPE1\t%d\t%d\t%d\t%d\t%d\t%d\n", binId,
-                                       readId, jId, s, e, N);
+                            if (e > N + 150 or s > N + 150) {
+                                // printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
+                                // printf("TYPE1\t%d\t%d\t%d\t%d\t%d\t%d\n",
+                                // binId,
+                                //  readId, jId, s, e, N);
                                 e = N;
                             }
                             h_setNoneZeroRoll(bin_buf, s, e);
@@ -142,10 +145,11 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
                                          reads - 1 - bin_start;
 
                             uint32_t e = reade - bin_start;
-                            if (e > N or s > N) {
-                                printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
-                                printf("TYPE2\t%d\t%d\t%d\t%d\t%d\t%d\n", binId,
-                                       readId, jId, s, e, N);
+                            if (e > N + 150 or s > N + 150) {
+                                // printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
+                                // printf("TYPE2\t%d\t%d\t%d\t%d\t%d\t%d\n",
+                                // binId,
+                                //        readId, jId, s, e, N);
                                 e = N;
                             }
                             h_setNoneZeroRoll(bin_buf, s, e);
@@ -155,10 +159,10 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
                                          reads - 1 - bin_start;
                             uint32_t e = t_filter.junctions[jId].start_ +
                                          reads - 1 - bin_start;
-                            if (e > N or s > N) {
-                                printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
-                                printf("TYPE3\t%d\t%d\t%d\t%d\t%d\t%d\n", binId,
-                                       readId, jId, s, e, N);
+                            if (e > N + 150 or s > N + 150) {
+                                // printf("TYPE\tbinId\treadId\tjId\ts\te\tN\n");
+                                // printf("TYPE3\t%d\t%d\t%d\t%d\t%d\t%d\n", binId,
+                                //        readId, jId, s, e, N);
                                 e = N;
                             }
                             h_setNoneZeroRoll(bin_buf, s, e);
@@ -1328,20 +1332,31 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads, h_nj_Reads &h_nj_reads,
     CUDA_SAFE_CALL(cudaMemcpy(nj_read2bin_end, d_nj_read2bin_end,
                               sizeof(int32_t) * numOfBin,
                               cudaMemcpyDeviceToHost));
-
+    int32_t *TPM_modify, *d_TPM_modify;
+    TMP_modify = new int32_t[numOfBin];
     modify_bin_length_host(h_bins, read2bin_start, read2bin_end, numOfRead,
                            nj_read2bin_start, nj_read2bin_end, numOf_nj_Read,
-                           h_reads, h_nj_reads, bin_length, numOfBin);
+                           h_reads, h_nj_reads, bin_length, numOfBin,
+                           TPM_modify);
+    CUDA_SAFE_CALL(
+        cudaMalloc((void *)&d_TPM_modify, sizeof(int32_t) * numOfBin));
+    CUDA_SAFE_CALL(cudaMempcy(d_TPM_modify, TPM_modify,
+                              sizeof(int32_t) * numOfBin,
+                              cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_bin_length, bin_length,
                               sizeof(int32_t) * numOfBin,
                               cudaMemcpyHostToDevice));
+    gpu_count_tempTPM_modify<<<nBlock, blockSize>>>(d_bins, numOfBin,
+                                                    d_TPM_modify);
+
     delete[] bin_length;
     delete[] read2bin_start;
     delete[] read2bin_end;
     delete[] nj_read2bin_start;
     delete[] nj_read2bin_end;
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
-
+    delete[] TPM_modify;
+    cudaFree(d_TPM_modify);
     gpu_count_tempTPM_new<<<nBlock, blockSize>>>(d_bins, numOfBin, d_tempTPM,
                                                  d_bin_length);
     // sum d_tempTPM
