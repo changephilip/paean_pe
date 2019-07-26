@@ -1340,7 +1340,7 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads, h_nj_Reads &h_nj_reads,
                            TPM_modify);
     CUDA_SAFE_CALL(
         cudaMalloc((void *)&d_TPM_modify, sizeof(int32_t) * numOfBin));
-    CUDA_SAFE_CALL(cudaMempcy(d_TPM_modify, TPM_modify,
+    CUDA_SAFE_CALL(cudaMemcpy(d_TPM_modify, TPM_modify,
                               sizeof(int32_t) * numOfBin,
                               cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_bin_length, bin_length,
