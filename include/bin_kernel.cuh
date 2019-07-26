@@ -131,12 +131,16 @@ __global__ void gpu_count_tempTPM(d_Bins d_bins, int32_t numOfBin,
     }
 }
 
-__global__void gpu_count_tempTPM_modify(d_Bins d_bins, int32_t numOfBin,
+__global__ void gpu_count_tempTPM_modify(d_Bins d_bins, int32_t numOfBin,
                                         int32_t *d_TPM_modify)
 {
     int32_t binId = blockDim.x * blockIdx.x + threadIdx.x;
     if (binId < numOfBin) {
-        d_bins.core[binId].readCount -= d_TPM_modify[binId];
+	if (d_bins.core[binId].readCount >= d_TPM_modify[binId]){
+        d_bins.core[binId].readCount -= d_TPM_modify[binId];}
+	else{
+		d_bins.core[binId].readCount= 0;
+	}
     }
 }
 

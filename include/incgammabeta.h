@@ -58,7 +58,7 @@ __device__ double betacf(const double a, const double b, const double x)
     if (fabs(d) < FPMIN) d = FPMIN;
     d = 1.0 / d;
     h = d;
-    #pragma unroll
+    // #pragma unroll
     for (m = 1; m < 100; m++) {
         m2 = 2 * m;
         aa = m * (b - m) * x / ((qam + m2) * (a + m2));

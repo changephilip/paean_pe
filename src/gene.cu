@@ -113,7 +113,7 @@ void modify_bin_length_host(h_Bins d_bins, int32_t *d_read2bin_start,
                             int(N + 150) or
                         t.junctions[jId].end_ + reads - 1 - bin_start >
                             (N + 150)) {
-                        TPM_modify += 1;
+			TPM_modify[binId] += 1;
                         continue;
                     } else {
                         t_filter.junctionCount += 1;
@@ -1333,21 +1333,21 @@ void HandleBin_cub_tpm(h_Bins &h_bins, h_Reads &h_reads, h_nj_Reads &h_nj_reads,
                               sizeof(int32_t) * numOfBin,
                               cudaMemcpyDeviceToHost));
     int32_t *TPM_modify, *d_TPM_modify;
-    TMP_modify = new int32_t[numOfBin];
+    TPM_modify = new int32_t[numOfBin];
     modify_bin_length_host(h_bins, read2bin_start, read2bin_end, numOfRead,
                            nj_read2bin_start, nj_read2bin_end, numOf_nj_Read,
                            h_reads, h_nj_reads, bin_length, numOfBin,
                            TPM_modify);
     CUDA_SAFE_CALL(
-        cudaMalloc((void *)&d_TPM_modify, sizeof(int32_t) * numOfBin));
+        cudaMalloc((void **)&d_TPM_modify, sizeof(int32_t) * numOfBin));
     CUDA_SAFE_CALL(cudaMemcpy(d_TPM_modify, TPM_modify,
                               sizeof(int32_t) * numOfBin,
                               cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_bin_length, bin_length,
                               sizeof(int32_t) * numOfBin,
                               cudaMemcpyHostToDevice));
-    gpu_count_tempTPM_modify<<<nBlock, blockSize>>>(d_bins, numOfBin,
-                                                    d_TPM_modify);
+    //gpu_count_tempTPM_modify<<<nBlock, blockSize>>>(d_bins, numOfBin,
+    //                                                d_TPM_modify);
 
     delete[] bin_length;
     delete[] read2bin_start;
