@@ -15,7 +15,7 @@ else()
     message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -I/home/qianjiaqiang/cub/cub -fstack-protector -D_FORCE_INLINES")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -I/home/path/to/cub/cub -fstack-protector -D_FORCE_INLINES")
 
 set(GPU_ARCHITECTURE "sm_61" CACHE STRING "Target GPU architecture")
 
