@@ -15,14 +15,21 @@ else()
     message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -I/home/path/to/cub/cub -fstack-protector -D_FORCE_INLINES")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -fstack-protector -D_FORCE_INLINES")
 
-set(GPU_ARCHITECTURE "sm_61" CACHE STRING "Target GPU architecture")
+# userdef comp_arch
+if(NOT DEFINED CUDA_ARCH)
+    message(STATUS "Setting CUDA_ARCH=61 on desktop GTX10 Card")
+    set(CUDAARCH "-arch=sm_61" CACHE STRING "Target GPU architecture")
+else()
+    message(STATUS "Using provided CUDA_ARCH=${CUDA_ARCH}")
+    set(CUDAARCH "-arch=sm_${CUDA_ARCH}" CACHE STRING "Target GPU architecture")
+endif()
 
 set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda-9.2")
 set(CUDA_LIBRARY_DIR /usr/local/cuda-9.2/lib64/)
 
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} ${CUDA_NVCC_DEBUG_FLAGS} -arch=${GPU_ARCHITECTURE} -use_fast_math -I/home/qianjiaqiang/cub/cub)
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} ${CUDA_NVCC_DEBUG_FLAGS} ${CUDAARCH} -use_fast_math)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
